@@ -1,0 +1,141 @@
+using System;
+using System.Collections.Generic;
+
+namespace StrategyGame;
+
+public enum ScrapChessTeam
+{
+	Blue,
+	Red
+}
+
+public enum ScrapChessMode
+{
+	PlayerVsComputer,
+	PlayerVsPlayer,
+	ComputerVsComputer
+}
+
+public enum UnitType
+{
+	Commander,
+	Buddy,
+	Shooter
+}
+
+public enum CardType
+{
+	Guard,
+	Push,
+	Focus,
+	Sprint,
+	BuildBuddy,
+	Repair
+}
+
+public readonly record struct GridPos( int X, int Y )
+{
+	public static readonly GridPos[] CardinalDirections =
+	{
+		new( 1, 0 ),
+		new( -1, 0 ),
+		new( 0, 1 ),
+		new( 0, -1 )
+	};
+
+	public bool IsInsideBoard => X >= 0 && X < ScrapChessGameComponent.BoardSize && Y >= 0 && Y < ScrapChessGameComponent.BoardSize;
+
+	public int ManhattanDistance( GridPos other )
+	{
+		return Math.Abs( X - other.X ) + Math.Abs( Y - other.Y );
+	}
+
+	public GridPos Offset( GridPos direction )
+	{
+		return new GridPos( X + direction.X, Y + direction.Y );
+	}
+}
+
+public sealed class UnitData
+{
+	public int Id { get; }
+	public ScrapChessTeam Team { get; }
+	public UnitType Type { get; }
+	public GridPos Position { get; set; }
+	public int Health { get; set; }
+	public int MaxHealth { get; }
+	public int MoveRange { get; }
+	public int AttackRange { get; }
+	public int Damage { get; }
+	public int Shield { get; set; }
+	public int FocusDamageBonus { get; set; }
+	public int SprintMoveBonus { get; set; }
+	public bool CanActThisTurn { get; set; } = true;
+
+	public UnitData( int id, ScrapChessTeam team, UnitType type, GridPos position )
+	{
+		Id = id;
+		Team = team;
+		Type = type;
+		Position = position;
+
+		switch ( type )
+		{
+			case UnitType.Commander:
+				MaxHealth = 6;
+				MoveRange = 1;
+				AttackRange = 1;
+				Damage = 1;
+				break;
+			case UnitType.Buddy:
+				MaxHealth = 3;
+				MoveRange = 2;
+				AttackRange = 1;
+				Damage = 1;
+				break;
+			case UnitType.Shooter:
+				MaxHealth = 2;
+				MoveRange = 1;
+				AttackRange = 3;
+				Damage = 1;
+				break;
+		}
+
+		Health = MaxHealth;
+	}
+
+	public int CurrentMoveRange => MoveRange + SprintMoveBonus;
+	public int CurrentDamage => Damage + FocusDamageBonus;
+	public string ShortName => Type switch
+	{
+		UnitType.Commander => "CMD",
+		UnitType.Buddy => "BUD",
+		UnitType.Shooter => "SHT",
+		_ => "???"
+	};
+}
+
+public readonly record struct CardData( CardType Type, string Name, int Cost, string RulesText )
+{
+	public static readonly IReadOnlyDictionary<CardType, CardData> All = new Dictionary<CardType, CardData>
+	{
+		[CardType.Guard] = new( CardType.Guard, "Guard", 1, "Choose one friendly unit. It gains +1 Shield until your next turn. Shield blocks damage before Health." ),
+		[CardType.Push] = new( CardType.Push, "Push", 1, "Choose one ready friendly unit, then choose an adjacent enemy. Push that enemy 1 tile directly away if the space is empty." ),
+		[CardType.Focus] = new( CardType.Focus, "Focus", 2, "Choose one friendly unit. Its next attack this turn deals +1 extra damage. Does not protect the unit." ),
+		[CardType.Sprint] = new( CardType.Sprint, "Sprint", 2, "Choose one friendly unit before it moves. It gets +1 move range this turn only. It still cannot attack after moving." ),
+		[CardType.BuildBuddy] = new( CardType.BuildBuddy, "Build Buddy", 3, "Choose an empty tile next to your Commander. Summon a Buddy there. The new Buddy can act next turn." ),
+		[CardType.Repair] = new( CardType.Repair, "Repair", 2, "Choose one damaged friendly unit. Restore 1 Health, up to its maximum Health. Does not add Shield." )
+	};
+
+	public static readonly IReadOnlyDictionary<CardType, CardVisualData> Visuals = new Dictionary<CardType, CardVisualData>
+	{
+		[CardType.Guard] = new( "Defense", "guard-art", "SHD", "Tiny shield, excellent timing.", "COMMON" ),
+		[CardType.Push] = new( "Tactic", "push-art", ">>", "Personal space is a battle strategy.", "COMMON" ),
+		[CardType.Focus] = new( "Attack", "focus-art", "FOC", "One good hit, carefully planned.", "RARE" ),
+		[CardType.Sprint] = new( "Movement", "sprint-art", "RUN", "Little legs. Big plans.", "COMMON" ),
+		[CardType.BuildBuddy] = new( "Summon", "build-art", "BUD", "Backup has entered the board.", "RARE" ),
+		[CardType.Repair] = new( "Support", "repair-art", "FIX", "Duct tape, courage, and one more turn.", "COMMON" )
+	};
+}
+
+public readonly record struct CardVisualData( string TypeLabel, string ArtClass, string ArtGlyph, string FlavorText, string RarityText );

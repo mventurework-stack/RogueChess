@@ -1,0 +1,440 @@
+@using Sandbox
+@using Sandbox.UI
+@using System
+@namespace StrategyGame
+@inherits Panel
+
+<root class="scrap-chess">
+	<div class="arena-background"></div>
+	<div class="arena-overlay"></div>
+	<div class="game-ui">
+	@if ( Game is null )
+	{
+		<div class="missing">Attach ScrapChessGameComponent or assign Game on this panel.</div>
+	}
+	else
+	{
+		@if ( ShowIntro )
+		{
+			<div class="intro-screen">
+				<div class="intro-title">Scrap Chess Buddies</div>
+				<div class="intro-page-label">Page @(IntroPage + 1) of @IntroPageCount</div>
+
+				@if ( IntroPage == 0 )
+				{
+					<div class="intro-panel">
+						<div class="intro-card-title">1. What you are trying to do</div>
+						<div class="intro-card-text">Blue starts at the bottom. Red starts at the top.</div>
+						<div class="intro-card-text">Each side has one Commander. Your goal is to attack the enemy Commander until its health reaches 0.</div>
+						<div class="intro-card-text">Protect your own Commander. If your Commander reaches 0 health, you lose.</div>
+					</div>
+				}
+				else if ( IntroPage == 1 )
+				{
+					<div class="intro-panel">
+						<div class="intro-card-title">2. What to do on your turn</div>
+						<div class="intro-step">Click one of your units.</div>
+						<div class="intro-step">Then click a highlighted tile to move, or a highlighted enemy to attack.</div>
+						<div class="intro-step">You may also play one card from your hand before or after the unit action.</div>
+						<div class="intro-step">When you are done, click End Turn.</div>
+						<div class="intro-step">The mode button can switch between Player vs Computer, Player vs Player, and Computer vs Computer.</div>
+					</div>
+				}
+				else if ( IntroPage == 2 )
+				{
+					<div class="intro-panel">
+						<div class="intro-card-title">3. The most important rule</div>
+						<div class="intro-card-text">A unit can move OR attack on its turn. It cannot do both.</div>
+						<div class="intro-card-text">That means positioning matters. Sometimes moving to a better square is stronger than attacking right away.</div>
+						<div class="intro-card-text">Units move up, down, left, and right. They do not move diagonally.</div>
+					</div>
+				}
+				else if ( IntroPage == 3 )
+				{
+					<div class="intro-panel unit-page">
+						<div class="intro-card-title">4. Your units</div>
+						<div class="instruction-unit-list">
+							<div class="instruction-unit-row">
+								<div class="instruction-unit-image commander-blue"></div>
+								<div class="instruction-unit-copy">
+									<div class="instruction-unit-name">Commander</div>
+									<div class="instruction-unit-text">Your most important unit. If it is defeated, you lose.</div>
+								</div>
+							</div>
+							<div class="instruction-unit-row">
+								<div class="instruction-unit-image buddy-blue"></div>
+								<div class="instruction-unit-copy">
+									<div class="instruction-unit-name">Buddy</div>
+									<div class="instruction-unit-text">A basic short-range unit. Good for blocking, collecting Scrap, and protecting the Commander.</div>
+								</div>
+							</div>
+							<div class="instruction-unit-row">
+								<div class="instruction-unit-image shooter-blue"></div>
+								<div class="instruction-unit-copy">
+									<div class="instruction-unit-name">Shooter</div>
+									<div class="instruction-unit-text">A fragile ranged unit. Good for attacking from a distance, but easy to lose.</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				}
+				else if ( IntroPage == 4 )
+				{
+					<div class="intro-panel">
+						<div class="intro-card-title">5. What the colors mean</div>
+						<div class="intro-legend move">Green outline: this is a legal move tile.</div>
+						<div class="intro-legend attack">Red outline: this enemy can be attacked.</div>
+						<div class="intro-legend card-target">Yellow outline: your selected card can target this tile.</div>
+						<div class="intro-legend selected">White outline: this is your selected unit.</div>
+					</div>
+				}
+				else if ( IntroPage == 5 )
+				{
+					<div class="intro-panel first-move">
+						<div class="intro-card-title">6. Scrap tiles and cards</div>
+						<div class="intro-card-text">Scrap is the resource used to play cards.</div>
+						<div class="intro-card-text">At the start of every turn, you gain 1 Scrap automatically.</div>
+						<div class="intro-card-text">The board has center squares labeled Scrap Tile. If one of your units is standing on a Scrap Tile when your turn starts, you gain +1 extra Scrap for that unit.</div>
+						<div class="intro-card-text">Buddy moves up to 2 tiles, while Commander and Shooter move 1. That is why Buddy is best at reaching Scrap Tiles early.</div>
+						<div class="intro-card-text">Cards are automatic. At the start of your turn, the game adds 1 card to your hand.</div>
+						<div class="intro-card-text">Your hand can hold 5 cards. If your hand is full, you do not draw another card.</div>
+					</div>
+				}
+				else
+				{
+					<div class="intro-panel first-move">
+						<div class="intro-card-title">7. Playing cards</div>
+						<div class="intro-card-text">You may play only 1 card each turn. Cards are optional and do not replace your unit action.</div>
+						<div class="intro-card-text">Click the selected card again or use Cancel Card if you change your mind.</div>
+						<div class="intro-card-text">Build Buddy creates a Buddy beside your Commander, but that Buddy acts next turn.</div>
+						<div class="intro-card-text">Try this first: click Blue Buddy or Blue Shooter, move toward a center Scrap tile, then click End Turn.</div>
+					</div>
+				}
+
+				<div class="intro-footer">
+					<div class="intro-note">Tip: this plays more like chess than a dice game. You lose from bad position, not bad luck.</div>
+					<div class="intro-nav">
+						<div class="@IntroBackClass" onclick=@PreviousIntroPage>Back</div>
+						@if ( IntroPage < IntroPageCount - 1 )
+						{
+							<div class="skip-button" onclick=@StartGame>Skip</div>
+						}
+						@if ( IntroPage < IntroPageCount - 1 )
+						{
+							<div class="start-button" onclick=@NextIntroPage>Next</div>
+						}
+						else
+						{
+							<div class="start-button" onclick=@StartGame>Start Match</div>
+						}
+					</div>
+				</div>
+			</div>
+		}
+		else
+		{
+			<div class="topbar">
+				<div class="brand">Scrap Chess Buddies</div>
+				<div class="turn @Game.CurrentTeam.ToString().ToLower()">@Game.TeamName( Game.CurrentTeam ) Turn</div>
+				<div class="mode">@ModeText</div>
+				<div class="instructions-button" onclick=@ShowHowToPlay>Instructions</div>
+			</div>
+
+			<div class="play-area">
+				<div class="hand-panel blue-hand @(Game.CurrentTeam == ScrapChessTeam.Blue ? "active-hand" : "inactive-hand")">
+					<div class="hand-info">
+						<div class="hand-title">Blue Player</div>
+						<div class="side-scrap">Scrap: @Game.BlueScrap</div>
+						<div class="hand-help">Draws 1 card at start of Blue turn.</div>
+					</div>
+					@for ( var i = 0; i < Game.BlueHand.Count; i++ )
+					{
+						var card = Game.BlueHand[i];
+						var index = i;
+						var visual = CardData.Visuals[card];
+						var cardImageClass = GetCardImageClass( card, ScrapChessTeam.Blue );
+						var expanded = Game.CurrentTeam == ScrapChessTeam.Blue && Game.SelectedCardIndex == index;
+						<div class="@(Game.GetCardClass( ScrapChessTeam.Blue, index ) + " " + visual.ArtClass)" onclick=@( () => Game.SelectCard( ScrapChessTeam.Blue, index ) )>
+							<div class="card-shine"></div>
+							<div class="collapsed-row">
+								<div class="card-thumb">
+									<div class="card-image thumbnail @cardImageClass"></div>
+								</div>
+								<div class="card-summary">
+									<div class="card-name">@CardData.All[card].Name</div>
+								</div>
+								<div class="card-cost">
+									<div class="cost-number">@CardData.All[card].Cost</div>
+								</div>
+							</div>
+							@if ( expanded )
+							{
+								<div class="expanded-section">
+									<div class="card-image-wrap">
+										<div class="card-image full @cardImageClass"></div>
+									</div>
+									<div class="card-rules-box">
+										<div class="card-text">@CardData.All[card].RulesText</div>
+										<div class="card-flavor">@visual.FlavorText</div>
+									</div>
+									<div class="card-rarity-row">
+										<div class="rarity-text">@visual.RarityText</div>
+										<div class="rarity-dots"><span></span><span></span><span></span></div>
+									</div>
+								</div>
+							}
+						</div>
+					}
+				</div>
+
+				<div class="center">
+					<div class="board-balance-spacer"></div>
+					<div class="board">
+						@for ( var y = 0; y < ScrapChessGameComponent.BoardSize; y++ )
+						{
+							<div class="board-row">
+								@for ( var x = 0; x < ScrapChessGameComponent.BoardSize; x++ )
+								{
+									var tileX = x;
+									var tileY = y;
+									var unit = Game.GetUnitAt( tileX, tileY );
+									var tileCue = Game.GetTileCueText( tileX, tileY );
+									var hitSplatClass = Game.GetHitEffectClass( tileX, tileY, "hit-splat-effect" );
+									var hitSparkClass = Game.GetHitEffectClass( tileX, tileY, "hit-spark-effect" );
+									var dyingUnitClass = Game.GetDyingUnitTokenClass( tileX, tileY );
+									var deathSplatClass = Game.GetDeathSplatClass( tileX, tileY, "death-splat-effect" );
+									var deathSwirlClass = Game.GetDeathSplatClass( tileX, tileY, "death-swirl-effect" );
+									<div class="@Game.GetTileClass( tileX, tileY )" onclick=@( () => Game.ClickTile( tileX, tileY ) )>
+										@if ( Game.IsResourceTile( tileX, tileY ) )
+										{
+											<div class="resource-mark">Scrap Tile</div>
+										}
+
+										@if ( unit is not null )
+										{
+											<div class="piece-token image-token @GetPieceImageClass( unit )">
+												<div class="piece-art"></div>
+												<div class="piece-hp">
+													<span>@unit.Health/@unit.MaxHealth</span>
+													@if ( unit.Shield > 0 )
+													{
+														<span> +@unit.Shield SH</span>
+													}
+												</div>
+											</div>
+											@if ( !unit.CanActThisTurn )
+											{
+												<div class="unit-wait">NEXT TURN</div>
+											}
+										}
+										@if ( !string.IsNullOrEmpty( dyingUnitClass ) )
+										{
+											<div class="@dyingUnitClass">
+												<div class="piece-art"></div>
+												<div class="@deathSplatClass"></div>
+												<div class="@deathSwirlClass"></div>
+											</div>
+										}
+										@if ( !string.IsNullOrEmpty( hitSplatClass ) )
+										{
+											<div class="@hitSplatClass"></div>
+											<div class="@hitSparkClass"></div>
+										}
+										@if ( !string.IsNullOrEmpty( tileCue ) )
+										{
+											<div class="tile-cue">@tileCue</div>
+										}
+									</div>
+								}
+							</div>
+						}
+					</div>
+
+					<div class="status-row">
+						<div class="status">
+							@if ( Game.Winner is not null )
+							{
+								<span>@Game.TeamName( Game.Winner.Value ) wins. Restart to play again.</span>
+							}
+							else
+							{
+								<span>@Game.StatusMessage</span>
+							}
+						</div>
+						<div class="actions">
+							<div class="action-button" onclick=@Game.HandleTurnButton>@TurnButtonText</div>
+							<div class="action-button" onclick=@Game.RestartMatch>Restart Match</div>
+							<div class="mode-button-row">
+								<div class="@GetModeButtonClass( ScrapChessMode.PlayerVsPlayer )" onclick=@( () => Game.SetMode( ScrapChessMode.PlayerVsPlayer ) )>PVP</div>
+								<div class="@GetModeButtonClass( ScrapChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( ScrapChessMode.PlayerVsComputer ) )>PVE</div>
+								<div class="@GetModeButtonClass( ScrapChessMode.ComputerVsComputer )" onclick=@( () => Game.SetMode( ScrapChessMode.ComputerVsComputer ) )>PVC</div>
+							</div>
+							@if ( Game.SelectedCardIndex >= 0 )
+							{
+								<div class="action-button cancel" onclick=@Game.CancelSelectedCard>Cancel Card</div>
+							}
+							else
+							{
+								<div class="action-button" onclick=@ShowHowToPlay>How To Play</div>
+							}
+						</div>
+					</div>
+				</div>
+
+				<div class="hand-panel red-hand @(Game.CurrentTeam == ScrapChessTeam.Red ? "active-hand" : "inactive-hand")">
+					<div class="hand-info">
+						<div class="hand-title">Red Player</div>
+						<div class="side-scrap">Scrap: @Game.RedScrap</div>
+						<div class="hand-help">Draws 1 card at start of Red turn.</div>
+					</div>
+					@for ( var i = 0; i < Game.RedHand.Count; i++ )
+					{
+						var card = Game.RedHand[i];
+						var index = i;
+						var visual = CardData.Visuals[card];
+						var cardImageClass = GetCardImageClass( card, ScrapChessTeam.Red );
+						var expanded = Game.CurrentTeam == ScrapChessTeam.Red && Game.SelectedCardIndex == index;
+						<div class="@(Game.GetCardClass( ScrapChessTeam.Red, index ) + " " + visual.ArtClass)" onclick=@( () => Game.SelectCard( ScrapChessTeam.Red, index ) )>
+							<div class="card-shine"></div>
+							<div class="collapsed-row">
+								<div class="card-thumb">
+									<div class="card-image thumbnail @cardImageClass"></div>
+								</div>
+								<div class="card-summary">
+									<div class="card-name">@CardData.All[card].Name</div>
+								</div>
+								<div class="card-cost">
+									<div class="cost-number">@CardData.All[card].Cost</div>
+								</div>
+							</div>
+							@if ( expanded )
+							{
+								<div class="expanded-section">
+									<div class="card-image-wrap">
+										<div class="card-image full @cardImageClass"></div>
+									</div>
+									<div class="card-rules-box">
+										<div class="card-text">@CardData.All[card].RulesText</div>
+										<div class="card-flavor">@visual.FlavorText</div>
+									</div>
+									<div class="card-rarity-row">
+										<div class="rarity-text">@visual.RarityText</div>
+										<div class="rarity-dots"><span></span><span></span><span></span></div>
+									</div>
+								</div>
+							}
+						</div>
+					}
+				</div>
+			</div>
+		}
+	}
+	</div>
+</root>
+
+@code
+{
+	[Parameter] public ScrapChessGameComponent Game { get; set; }
+	bool ShowIntro { get; set; } = true;
+	int IntroPage { get; set; }
+	const int IntroPageCount = 7;
+	string IntroBackClass => IntroPage == 0 ? "nav-button disabled" : "nav-button";
+	string ModeText => Game?.Mode switch
+	{
+		ScrapChessMode.PlayerVsComputer => "Player vs Computer: Blue human, Red CPU",
+		ScrapChessMode.PlayerVsPlayer => "Player vs Player: both human",
+		ScrapChessMode.ComputerVsComputer => "Computer vs Computer: both CPU",
+		_ => ""
+	};
+
+	string TurnButtonText => Game?.Mode == ScrapChessMode.ComputerVsComputer ? "Stop Game" : "End Turn";
+
+	string GetModeButtonClass( ScrapChessMode mode )
+	{
+		return Game?.Mode == mode ? "mode-button active" : "mode-button";
+	}
+
+	string GetPieceImageClass( UnitData unit )
+	{
+		if ( unit.Team == ScrapChessTeam.Blue )
+		{
+			return unit.Type switch
+			{
+				UnitType.Commander => "piece-commander-blue",
+				UnitType.Buddy => "piece-buddy-blue",
+				UnitType.Shooter => "piece-shooter-blue",
+				_ => ""
+			};
+		}
+
+		return unit.Type switch
+		{
+			UnitType.Commander => "piece-commander-red",
+			UnitType.Buddy => "piece-buddy-red",
+			UnitType.Shooter => "piece-shooter-red",
+			_ => ""
+		};
+	}
+
+	string GetCardImageClass( CardType cardType, ScrapChessTeam team )
+	{
+		if ( team == ScrapChessTeam.Blue )
+		{
+			return cardType switch
+			{
+				CardType.Guard => "card-image-guard-blue",
+				CardType.Push => "card-image-push-blue",
+				CardType.Focus => "card-image-focus-blue",
+				CardType.Sprint => "card-image-sprint-blue",
+				CardType.BuildBuddy => "card-image-build-buddy-blue",
+				CardType.Repair => "card-image-repair-blue",
+				_ => ""
+			};
+		}
+
+		return cardType switch
+		{
+			CardType.Guard => "card-image-guard-red",
+			CardType.Push => "card-image-push-red",
+			CardType.Focus => "card-image-focus-red",
+			CardType.Sprint => "card-image-sprint-red",
+			CardType.BuildBuddy => "card-image-build-buddy-red",
+			CardType.Repair => "card-image-repair-red",
+			_ => ""
+		};
+	}
+
+	void StartGame()
+	{
+		ShowIntro = false;
+		StateHasChanged();
+	}
+
+	void ShowHowToPlay()
+	{
+		ShowIntro = true;
+		IntroPage = 0;
+		StateHasChanged();
+	}
+
+	void PreviousIntroPage()
+	{
+		if ( IntroPage > 0 )
+			IntroPage--;
+
+		StateHasChanged();
+	}
+
+	void NextIntroPage()
+	{
+		if ( IntroPage < IntroPageCount - 1 )
+			IntroPage++;
+
+		StateHasChanged();
+	}
+
+	protected override int BuildHash()
+	{
+		return HashCode.Combine( Game?.UiVersion ?? 0, ShowIntro, IntroPage );
+	}
+}
