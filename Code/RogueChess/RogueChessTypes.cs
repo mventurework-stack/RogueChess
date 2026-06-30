@@ -3,13 +3,13 @@ using System.Collections.Generic;
 
 namespace StrategyGame;
 
-public enum ScrapChessTeam
+public enum roguechessTeam
 {
 	Blue,
 	Red
 }
 
-public enum ScrapChessMode
+public enum roguechessMode
 {
 	PlayerVsComputer,
 	PlayerVsPlayer,
@@ -43,7 +43,7 @@ public readonly record struct GridPos( int X, int Y )
 		new( 0, -1 )
 	};
 
-	public bool IsInsideBoard => X >= 0 && X < ScrapChessGameComponent.BoardSize && Y >= 0 && Y < ScrapChessGameComponent.BoardSize;
+	public bool IsInsideBoard => X >= 0 && X < roguechessGameComponent.BoardSize && Y >= 0 && Y < roguechessGameComponent.BoardSize;
 
 	public int ManhattanDistance( GridPos other )
 	{
@@ -59,7 +59,7 @@ public readonly record struct GridPos( int X, int Y )
 public sealed class UnitData
 {
 	public int Id { get; }
-	public ScrapChessTeam Team { get; }
+	public roguechessTeam Team { get; }
 	public UnitType Type { get; }
 	public GridPos Position { get; set; }
 	public int Health { get; set; }
@@ -72,7 +72,7 @@ public sealed class UnitData
 	public int SprintMoveBonus { get; set; }
 	public bool CanActThisTurn { get; set; } = true;
 
-	public UnitData( int id, ScrapChessTeam team, UnitType type, GridPos position )
+	public UnitData( int id, roguechessTeam team, UnitType type, GridPos position )
 	{
 		Id = id;
 		Team = team;

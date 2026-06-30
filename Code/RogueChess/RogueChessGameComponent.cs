@@ -12,7 +12,7 @@ namespace StrategyGame;
 /// UseEmbeddedPanel enabled to spawn the UI through a ScreenPanel automatically.
 /// </summary>
 [Title( "Scrap Chess Game" ), Category( "Prototype" ), Icon( "grid_on" )]
-public sealed class ScrapChessGameComponent : Component
+public sealed class roguechessGameComponent : Component
 {
 	public const int BoardSize = 8;
 	const int HandLimit = 5;
@@ -20,10 +20,10 @@ public sealed class ScrapChessGameComponent : Component
 	const float DeathEffectDuration = 1.0f;
 	const float UnitSoundVolume = 0.45f;
 	const float BackgroundSoundVolume = 0.45f;
-	const string UnitHitSoundPath = "sounds/scrapchess/hit_sound.sound";
-	const string UnitDeathSoundPath = "sounds/scrapchess/death.sound";
-	const string UnitMoveSoundPath = "sounds/scrapchess/movement.sound";
-	const string BackgroundSoundPath = "sounds/scrapchess/background.sound";
+	const string UnitHitSoundPath = "sounds/roguechess/hit_sound.sound";
+	const string UnitDeathSoundPath = "sounds/roguechess/death.sound";
+	const string UnitMoveSoundPath = "sounds/roguechess/movement.sound";
+	const string BackgroundSoundPath = "sounds/roguechess/background.sound";
 
 	static readonly GridPos[] ResourceTiles =
 	{
@@ -49,9 +49,9 @@ public sealed class ScrapChessGameComponent : Component
 	[Property] public SoundEvent UnitMoveSound { get; set; }
 	[Property] public SoundEvent BackgroundSound { get; set; }
 
-	public ScrapChessMode Mode { get; private set; } = ScrapChessMode.PlayerVsComputer;
-	public ScrapChessTeam CurrentTeam { get; private set; }
-	public ScrapChessTeam? Winner { get; private set; }
+	public roguechessMode Mode { get; private set; } = roguechessMode.PlayerVsComputer;
+	public roguechessTeam CurrentTeam { get; private set; }
+	public roguechessTeam? Winner { get; private set; }
 	public int BlueScrap { get; private set; }
 	public int RedScrap { get; private set; }
 	public bool UnitActionSpent { get; private set; }
@@ -81,7 +81,7 @@ public sealed class ScrapChessGameComponent : Component
 	float nextBackgroundSoundRetryTime;
 	SoundHandle backgroundSoundHandle;
 	ScreenPanel screenPanel;
-	ScrapChessPanel uiPanel;
+	roguechessPanel uiPanel;
 
 	protected override void OnStart()
 	{
@@ -116,7 +116,7 @@ public sealed class ScrapChessGameComponent : Component
 		screenPanel = GameObject.GetComponent<ScreenPanel>() ?? GameObject.AddComponent<ScreenPanel>();
 		screenPanel.AutoScreenScale = true;
 
-		uiPanel = screenPanel.GetPanel().AddChild<ScrapChessPanel>();
+		uiPanel = screenPanel.GetPanel().AddChild<roguechessPanel>();
 		uiPanel.Game = this;
 		MarkDirty();
 	}
@@ -137,17 +137,17 @@ public sealed class ScrapChessGameComponent : Component
 		Winner = null;
 		TurnNumber = 0;
 
-		AddUnit( ScrapChessTeam.Blue, UnitType.Commander, new GridPos( 3, 7 ) );
-		AddUnit( ScrapChessTeam.Blue, UnitType.Buddy, new GridPos( 2, 7 ) );
-		AddUnit( ScrapChessTeam.Blue, UnitType.Shooter, new GridPos( 4, 7 ) );
-		AddUnit( ScrapChessTeam.Red, UnitType.Commander, new GridPos( 3, 0 ) );
-		AddUnit( ScrapChessTeam.Red, UnitType.Buddy, new GridPos( 2, 0 ) );
-		AddUnit( ScrapChessTeam.Red, UnitType.Shooter, new GridPos( 4, 0 ) );
+		AddUnit( roguechessTeam.Blue, UnitType.Commander, new GridPos( 3, 7 ) );
+		AddUnit( roguechessTeam.Blue, UnitType.Buddy, new GridPos( 2, 7 ) );
+		AddUnit( roguechessTeam.Blue, UnitType.Shooter, new GridPos( 4, 7 ) );
+		AddUnit( roguechessTeam.Red, UnitType.Commander, new GridPos( 3, 0 ) );
+		AddUnit( roguechessTeam.Red, UnitType.Buddy, new GridPos( 2, 0 ) );
+		AddUnit( roguechessTeam.Red, UnitType.Shooter, new GridPos( 4, 0 ) );
 
-		StartTurn( ScrapChessTeam.Blue );
+		StartTurn( roguechessTeam.Blue );
 	}
 
-	public void SetMode( ScrapChessMode mode )
+	public void SetMode( roguechessMode mode )
 	{
 		Mode = mode;
 
@@ -155,9 +155,9 @@ public sealed class ScrapChessGameComponent : Component
 
 		StatusMessage = Mode switch
 		{
-			ScrapChessMode.PlayerVsComputer => "Mode: Player vs Computer. Blue is human and Red is computer.",
-			ScrapChessMode.PlayerVsPlayer => "Mode: Player vs Player. Both sides are controlled by people.",
-			ScrapChessMode.ComputerVsComputer => "Mode: Computer vs Computer. Both sides will play automatically.",
+			roguechessMode.PlayerVsComputer => "Mode: Player vs Computer. Blue is human and Red is computer.",
+			roguechessMode.PlayerVsPlayer => "Mode: Player vs Player. Both sides are controlled by people.",
+			roguechessMode.ComputerVsComputer => "Mode: Computer vs Computer. Both sides will play automatically.",
 			_ => StatusMessage
 		};
 
@@ -167,7 +167,7 @@ public sealed class ScrapChessGameComponent : Component
 
 	public void HandleTurnButton()
 	{
-		if ( Mode == ScrapChessMode.ComputerVsComputer )
+		if ( Mode == roguechessMode.ComputerVsComputer )
 		{
 			StopPvcGame();
 			return;
@@ -178,10 +178,10 @@ public sealed class ScrapChessGameComponent : Component
 
 	public void StopPvcGame()
 	{
-		if ( Mode != ScrapChessMode.ComputerVsComputer )
+		if ( Mode != roguechessMode.ComputerVsComputer )
 			return;
 
-		Mode = ScrapChessMode.PlayerVsComputer;
+		Mode = roguechessMode.PlayerVsComputer;
 		ClearSelection();
 		StatusMessage = "PVC game stopped.";
 		MarkDirty();
@@ -261,7 +261,7 @@ public sealed class ScrapChessGameComponent : Component
 		MarkDirty();
 	}
 
-	public void SelectCard( ScrapChessTeam team, int index )
+	public void SelectCard( roguechessTeam team, int index )
 	{
 		if ( Winner is not null || IsCurrentAiTurn() )
 			return;
@@ -342,7 +342,7 @@ public sealed class ScrapChessGameComponent : Component
 		if ( unit is not null )
 		{
 			classes.Add( "occupied" );
-			classes.Add( unit.Team == ScrapChessTeam.Blue ? "blue-unit" : "red-unit" );
+			classes.Add( unit.Team == roguechessTeam.Blue ? "blue-unit" : "red-unit" );
 			if ( unit.Id == SelectedUnitId )
 				classes.Add( "selected" );
 		}
@@ -434,9 +434,9 @@ public sealed class ScrapChessGameComponent : Component
 		return "";
 	}
 
-	public string GetPieceImageClass( ScrapChessTeam team, UnitType type )
+	public string GetPieceImageClass( roguechessTeam team, UnitType type )
 	{
-		if ( team == ScrapChessTeam.Blue )
+		if ( team == roguechessTeam.Blue )
 		{
 			return type switch
 			{
@@ -456,7 +456,7 @@ public sealed class ScrapChessGameComponent : Component
 		};
 	}
 
-	public string GetCardClass( ScrapChessTeam team, int index )
+	public string GetCardClass( roguechessTeam team, int index )
 	{
 		var classes = new List<string> { "card" };
 		var hand = GetHand( team );
@@ -475,14 +475,14 @@ public sealed class ScrapChessGameComponent : Component
 		return string.Join( " ", classes );
 	}
 
-	public string TeamName( ScrapChessTeam team )
+	public string TeamName( roguechessTeam team )
 	{
-		return team == ScrapChessTeam.Blue ? "Blue" : "Red";
+		return team == roguechessTeam.Blue ? "Blue" : "Red";
 	}
 
-	public int GetScrap( ScrapChessTeam team )
+	public int GetScrap( roguechessTeam team )
 	{
-		return team == ScrapChessTeam.Blue ? BlueScrap : RedScrap;
+		return team == roguechessTeam.Blue ? BlueScrap : RedScrap;
 	}
 
 	public bool IsCurrentAiTurn()
@@ -490,17 +490,17 @@ public sealed class ScrapChessGameComponent : Component
 		return IsComputerControlled( CurrentTeam ) && Winner is null;
 	}
 
-	public bool IsComputerControlled( ScrapChessTeam team )
+	public bool IsComputerControlled( roguechessTeam team )
 	{
 		return Mode switch
 		{
-			ScrapChessMode.PlayerVsComputer => team == ScrapChessTeam.Red,
-			ScrapChessMode.ComputerVsComputer => true,
+			roguechessMode.PlayerVsComputer => team == roguechessTeam.Red,
+			roguechessMode.ComputerVsComputer => true,
 			_ => false
 		};
 	}
 
-	public bool IsHumanControlled( ScrapChessTeam team )
+	public bool IsHumanControlled( roguechessTeam team )
 	{
 		return !IsComputerControlled( team );
 	}
@@ -517,7 +517,7 @@ public sealed class ScrapChessGameComponent : Component
 		}
 	}
 
-	void StartTurn( ScrapChessTeam team )
+	void StartTurn( roguechessTeam team )
 	{
 		CurrentTeam = team;
 		UnitActionSpent = false;
@@ -549,23 +549,23 @@ public sealed class ScrapChessGameComponent : Component
 			nextAiActionTime = Time.Now + 0.65f;
 	}
 
-	void DrawCard( ScrapChessTeam team )
+	void DrawCard( roguechessTeam team )
 	{
 		var hand = GetHand( team );
 		if ( hand.Count >= HandLimit )
 			return;
 
-		var deckIndex = team == ScrapChessTeam.Blue ? blueDeckIndex : redDeckIndex;
+		var deckIndex = team == roguechessTeam.Blue ? blueDeckIndex : redDeckIndex;
 		hand.Add( DeckOrder[deckIndex % DeckOrder.Length] );
 		deckIndex++;
 
-		if ( team == ScrapChessTeam.Blue )
+		if ( team == roguechessTeam.Blue )
 			blueDeckIndex = deckIndex;
 		else
 			redDeckIndex = deckIndex;
 	}
 
-	UnitData AddUnit( ScrapChessTeam team, UnitType type, GridPos position, bool canActThisTurn = true )
+	UnitData AddUnit( roguechessTeam team, UnitType type, GridPos position, bool canActThisTurn = true )
 	{
 		var unit = new UnitData( nextUnitId++, team, type, position )
 		{
@@ -770,7 +770,7 @@ public sealed class ScrapChessGameComponent : Component
 		return true;
 	}
 
-	bool TryPlayCardAt( ScrapChessTeam team, CardType card, GridPos pos )
+	bool TryPlayCardAt( roguechessTeam team, CardType card, GridPos pos )
 	{
 		var data = CardData.All[card];
 		if ( GetScrap( team ) < data.Cost )
@@ -784,7 +784,7 @@ public sealed class ScrapChessGameComponent : Component
 		return true;
 	}
 
-	bool ApplyCardEffect( ScrapChessTeam team, CardType card, GridPos pos )
+	bool ApplyCardEffect( roguechessTeam team, CardType card, GridPos pos )
 	{
 		var target = GetUnitAt( pos );
 
@@ -852,7 +852,7 @@ public sealed class ScrapChessGameComponent : Component
 		return IsValidCardTarget( CurrentTeam, hand[SelectedCardIndex], pos );
 	}
 
-	bool IsValidCardTarget( ScrapChessTeam team, CardType card, GridPos pos )
+	bool IsValidCardTarget( roguechessTeam team, CardType card, GridPos pos )
 	{
 		var target = GetUnitAt( pos );
 		var commander = GetCommander( team );
@@ -869,7 +869,7 @@ public sealed class ScrapChessGameComponent : Component
 		};
 	}
 
-	bool TryGetPushDestination( ScrapChessTeam team, UnitData enemy, out GridPos destination )
+	bool TryGetPushDestination( roguechessTeam team, UnitData enemy, out GridPos destination )
 	{
 		var selected = GetSelectedUnit();
 		if ( selected is not null && selected.Team == team && selected.CanActThisTurn && TryGetPushDestinationFromSource( selected, enemy, out destination ) )
@@ -991,7 +991,7 @@ public sealed class ScrapChessGameComponent : Component
 		}
 	}
 
-	void TryAiBuildBuddy( ScrapChessTeam team )
+	void TryAiBuildBuddy( roguechessTeam team )
 	{
 		if ( CardPlayed || GetScrap( team ) < CardData.All[CardType.BuildBuddy].Cost )
 			return;
@@ -1025,7 +1025,7 @@ public sealed class ScrapChessGameComponent : Component
 		}
 	}
 
-	void TryAiUnitAction( ScrapChessTeam team )
+	void TryAiUnitAction( roguechessTeam team )
 	{
 		var enemyTeam = OtherTeam( team );
 		var enemyCommander = GetCommander( enemyTeam );
@@ -1083,17 +1083,17 @@ public sealed class ScrapChessGameComponent : Component
 
 	void CheckCommanderVictory()
 	{
-		var blueCommander = GetCommander( ScrapChessTeam.Blue );
-		var redCommander = GetCommander( ScrapChessTeam.Red );
+		var blueCommander = GetCommander( roguechessTeam.Blue );
+		var redCommander = GetCommander( roguechessTeam.Red );
 
 		if ( blueCommander is not null && blueCommander.Health <= 0 )
-			Winner = ScrapChessTeam.Red;
+			Winner = roguechessTeam.Red;
 
 		if ( redCommander is not null && redCommander.Health <= 0 )
-			Winner = ScrapChessTeam.Blue;
+			Winner = roguechessTeam.Blue;
 	}
 
-	void ClearEndOfTurnBonuses( ScrapChessTeam team )
+	void ClearEndOfTurnBonuses( roguechessTeam team )
 	{
 		foreach ( var unit in units.Where( unit => unit.Team == team ) )
 		{
@@ -1108,17 +1108,17 @@ public sealed class ScrapChessGameComponent : Component
 		SelectedCardIndex = -1;
 	}
 
-	void SetScrap( ScrapChessTeam team, int value )
+	void SetScrap( roguechessTeam team, int value )
 	{
-		if ( team == ScrapChessTeam.Blue )
+		if ( team == roguechessTeam.Blue )
 			BlueScrap = value;
 		else
 			RedScrap = value;
 	}
 
-	List<CardType> GetHand( ScrapChessTeam team )
+	List<CardType> GetHand( roguechessTeam team )
 	{
-		return team == ScrapChessTeam.Blue ? blueHand : redHand;
+		return team == roguechessTeam.Blue ? blueHand : redHand;
 	}
 
 	UnitData GetUnitAt( GridPos pos )
@@ -1126,14 +1126,14 @@ public sealed class ScrapChessGameComponent : Component
 		return units.FirstOrDefault( unit => unit.Position == pos );
 	}
 
-	UnitData GetCommander( ScrapChessTeam team )
+	UnitData GetCommander( roguechessTeam team )
 	{
 		return units.FirstOrDefault( unit => unit.Team == team && unit.Type == UnitType.Commander );
 	}
 
-	ScrapChessTeam OtherTeam( ScrapChessTeam team )
+	roguechessTeam OtherTeam( roguechessTeam team )
 	{
-		return team == ScrapChessTeam.Blue ? ScrapChessTeam.Red : ScrapChessTeam.Blue;
+		return team == roguechessTeam.Blue ? roguechessTeam.Red : roguechessTeam.Blue;
 	}
 
 	string FormatPos( GridPos pos )
@@ -1148,5 +1148,5 @@ public sealed class ScrapChessGameComponent : Component
 	}
 
 	readonly record struct BoardEffect( GridPos Position, string EffectType, float StartTime, float EndTime );
-	readonly record struct DyingUnitVisual( GridPos Position, UnitType UnitType, ScrapChessTeam Team, float StartTime, float EndTime );
+	readonly record struct DyingUnitVisual( GridPos Position, UnitType UnitType, roguechessTeam Team, float StartTime, float EndTime );
 }
