@@ -6,6 +6,13 @@ using System.Linq;
 
 namespace StrategyGame;
 
+public enum AiDifficulty
+{
+	Beginner,
+	Intermediate,
+	Hard
+}
+
 /// <summary>
 /// Main controller for the Scrap Chess Buddies prototype.
 /// Scene setup: create an empty GameObject, attach this component, and leave
@@ -51,6 +58,7 @@ public sealed class RogueChessGameComponent : Component
 	[Property] public SoundEvent BackgroundSound { get; set; }
 
 	public RogueChessMode Mode { get; private set; } = RogueChessMode.PlayerVsComputer;
+	public AiDifficulty Difficulty { get; private set; } = AiDifficulty.Intermediate;
 	public RogueChessTeam CurrentTeam { get; private set; }
 	public RogueChessTeam? Winner { get; private set; }
 	public bool IsDraw { get; private set; }
@@ -170,6 +178,14 @@ public sealed class RogueChessGameComponent : Component
 		};
 
 		ScheduleAiIfNeeded();
+		MarkDirty();
+	}
+
+	public void SetDifficulty( AiDifficulty difficulty )
+	{
+		Difficulty = difficulty;
+		ClearSelection();
+		StatusMessage = $"Difficulty set to {difficulty}.";
 		MarkDirty();
 	}
 
@@ -563,7 +579,19 @@ public sealed class RogueChessGameComponent : Component
 	void ScheduleAiIfNeeded()
 	{
 		if ( IsCurrentAiTurn() )
-			nextAiActionTime = Time.Now + 0.65f;
+			nextAiActionTime = Time.Now + AiActionDelay;
+	}
+
+	float AiActionDelay => Difficulty switch
+	{
+		AiDifficulty.Beginner => 1.4f,
+		AiDifficulty.Hard => 0.4f,
+		_ => 0.65f
+	};
+
+	bool ShouldAiAttack()
+	{
+		return Difficulty != AiDifficulty.Beginner || TurnNumber % 3 == 0;
 	}
 
 	void DrawCard( RogueChessTeam team )
@@ -1024,6 +1052,13 @@ public sealed class RogueChessGameComponent : Component
 		if ( CardPlayed )
 			return;
 
+		if ( Difficulty == AiDifficulty.Beginner )
+		{
+			if ( TurnNumber % 4 == 0 )
+				TryAiBuildBuddy( team );
+			return;
+		}
+
 		if ( TryAiPlayFocus( team ) ) return;
 		if ( TryAiPlayGuard( team ) ) return;
 		if ( TryAiPlayRepair( team ) ) return;
@@ -1166,22 +1201,25 @@ public sealed class RogueChessGameComponent : Component
 		if ( enemyCommander is null )
 			return;
 
-		foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
+		if ( ShouldAiAttack() )
 		{
-			if ( IsLegalAttack( attacker, enemyCommander ) )
+			foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
 			{
-				AttackUnit( attacker, enemyCommander );
-				return;
+				if ( IsLegalAttack( attacker, enemyCommander ) )
+				{
+					AttackUnit( attacker, enemyCommander );
+					return;
+				}
 			}
-		}
 
-		foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
-		{
-			var killTarget = units.FirstOrDefault( unit => unit.Team == enemyTeam && IsLegalAttack( attacker, unit ) && unit.Health <= attacker.CurrentDamage );
-			if ( killTarget is not null )
+			foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
 			{
-				AttackUnit( attacker, killTarget );
-				return;
+				var killTarget = units.FirstOrDefault( unit => unit.Team == enemyTeam && IsLegalAttack( attacker, unit ) && unit.Health <= attacker.CurrentDamage );
+				if ( killTarget is not null )
+				{
+					AttackUnit( attacker, killTarget );
+					return;
+				}
 			}
 		}
 
@@ -1198,13 +1236,16 @@ public sealed class RogueChessGameComponent : Component
 			}
 		}
 
-		foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
+		if ( ShouldAiAttack() )
 		{
-			var target = units.FirstOrDefault( unit => unit.Team == enemyTeam && IsLegalAttack( attacker, unit ) );
-			if ( target is not null )
+			foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
 			{
-				AttackUnit( attacker, target );
-				return;
+				var target = units.FirstOrDefault( unit => unit.Team == enemyTeam && IsLegalAttack( attacker, unit ) );
+				if ( target is not null )
+				{
+					AttackUnit( attacker, target );
+					return;
+				}
 			}
 		}
 

@@ -280,6 +280,11 @@
 									<div class="@GetModeButtonClass( RogueChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsComputer ) )>PVE</div>
 									<div class="@GetModeButtonClass( RogueChessMode.ComputerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.ComputerVsComputer ) )>PVC</div>
 								</div>
+								<div class="mode-button-row">
+									<div class="@GetDifficultyButtonClass( AiDifficulty.Beginner )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Beginner ) )>Beginner</div>
+									<div class="@GetDifficultyButtonClass( AiDifficulty.Intermediate )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Intermediate ) )>Intermediate</div>
+									<div class="@GetDifficultyButtonClass( AiDifficulty.Hard )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Hard ) )>Hard</div>
+								</div>
 								@if ( Game.SelectedCardIndex >= 0 )
 								{
 									<div class="action-button cancel" onclick=@Game.CancelSelectedCard>Cancel Card</div>
@@ -364,6 +369,11 @@
 	string GetModeButtonClass( RogueChessMode mode )
 	{
 		return Game?.Mode == mode ? "mode-button active" : "mode-button";
+	}
+
+	string GetDifficultyButtonClass( AiDifficulty difficulty )
+	{
+		return Game?.Difficulty == difficulty ? "mode-button active" : "mode-button";
 	}
 
 	string GetPieceImageClass( UnitData unit )
