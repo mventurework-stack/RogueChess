@@ -36,7 +36,7 @@
 						<div class="intro-step">Click one of your units.</div>
 						<div class="intro-step">Then click a highlighted tile to move, or a highlighted enemy to attack.</div>
 						<div class="intro-step">You may also play one card from your hand before or after the unit action.</div>
-						<div class="intro-step">When you are done, click End Turn.</div>
+						<div class="intro-step">When you are done, click End Turn (or press Space or Tab).</div>
 						<div class="intro-step">The mode button can switch between Player vs Computer and Computer vs Computer.</div>
 					</div>
 				}
@@ -370,7 +370,42 @@
 		_ => ""
 	};
 
-	string TurnButtonText => Game?.Mode == RogueChessMode.ComputerVsComputer ? "Stop Game" : "End Turn";
+	string TurnButtonText => Game?.Mode == RogueChessMode.ComputerVsComputer ? "Stop Game" : "End Turn [Space]";
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		// Keyboard button events route to the focused panel, so keep focus here
+		// (nothing else in this UI is focusable) to make the End Turn shortcut work.
+		if ( !HasFocus )
+		{
+			AcceptsFocus = true;
+			Focus();
+		}
+	}
+
+	public override void OnButtonEvent( ButtonEvent e )
+	{
+		if ( e.Pressed && ( e.Button == "space" || e.Button == "tab" ) && CanEndTurnByKey() )
+		{
+			Game.EndTurn();
+			StateHasChanged();
+			e.StopPropagation = true;
+			return;
+		}
+
+		base.OnButtonEvent( e );
+	}
+
+	bool CanEndTurnByKey()
+	{
+		return Game is not null
+			&& !ShowIntro
+			&& !Game.IsGameOver
+			&& !Game.IsCurrentAiTurn()
+			&& Game.Mode != RogueChessMode.ComputerVsComputer;
+	}
 
 	string GetModeButtonClass( RogueChessMode mode )
 	{
