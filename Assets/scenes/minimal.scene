@@ -659,7 +659,7 @@
       "OwnerTransfer": 1,
       "Components": [
         {
-          "__type": "StrategyGame.ScrapChessGameComponent",
+          "__type": "StrategyGame.RogueChessGameComponent",
           "__guid": "32a2ecab-f89e-4f39-b967-75e00c46b5c9",
           "__enabled": true,
           "Flags": 0,

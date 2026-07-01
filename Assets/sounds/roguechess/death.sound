@@ -5,7 +5,7 @@
   "Decibels": 70,
   "SelectionMode": "Random",
   "Sounds": [
-    "sounds/scrapchess/death.vsnd"
+    "sounds/roguechess/death.vsnd"
   ],
   "OcclusionEnabled": true,
   "Occlusion": true,

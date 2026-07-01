@@ -12,7 +12,7 @@ namespace StrategyGame;
 /// UseEmbeddedPanel enabled to spawn the UI through a ScreenPanel automatically.
 /// </summary>
 [Title( "Scrap Chess Game" ), Category( "Prototype" ), Icon( "grid_on" )]
-public sealed class roguechessGameComponent : Component
+public sealed class RogueChessGameComponent : Component
 {
 	public const int BoardSize = 8;
 	const int HandLimit = 5;
@@ -49,9 +49,9 @@ public sealed class roguechessGameComponent : Component
 	[Property] public SoundEvent UnitMoveSound { get; set; }
 	[Property] public SoundEvent BackgroundSound { get; set; }
 
-	public roguechessMode Mode { get; private set; } = roguechessMode.PlayerVsComputer;
-	public roguechessTeam CurrentTeam { get; private set; }
-	public roguechessTeam? Winner { get; private set; }
+	public RogueChessMode Mode { get; private set; } = RogueChessMode.PlayerVsComputer;
+	public RogueChessTeam CurrentTeam { get; private set; }
+	public RogueChessTeam? Winner { get; private set; }
 	public int BlueScrap { get; private set; }
 	public int RedScrap { get; private set; }
 	public bool UnitActionSpent { get; private set; }
@@ -81,7 +81,7 @@ public sealed class roguechessGameComponent : Component
 	float nextBackgroundSoundRetryTime;
 	SoundHandle backgroundSoundHandle;
 	ScreenPanel screenPanel;
-	roguechessPanel uiPanel;
+	RogueChessPanel uiPanel;
 
 	protected override void OnStart()
 	{
@@ -116,7 +116,7 @@ public sealed class roguechessGameComponent : Component
 		screenPanel = GameObject.GetComponent<ScreenPanel>() ?? GameObject.AddComponent<ScreenPanel>();
 		screenPanel.AutoScreenScale = true;
 
-		uiPanel = screenPanel.GetPanel().AddChild<roguechessPanel>();
+		uiPanel = screenPanel.GetPanel().AddChild<RogueChessPanel>();
 		uiPanel.Game = this;
 		MarkDirty();
 	}
@@ -137,17 +137,17 @@ public sealed class roguechessGameComponent : Component
 		Winner = null;
 		TurnNumber = 0;
 
-		AddUnit( roguechessTeam.Blue, UnitType.Commander, new GridPos( 3, 7 ) );
-		AddUnit( roguechessTeam.Blue, UnitType.Buddy, new GridPos( 2, 7 ) );
-		AddUnit( roguechessTeam.Blue, UnitType.Shooter, new GridPos( 4, 7 ) );
-		AddUnit( roguechessTeam.Red, UnitType.Commander, new GridPos( 3, 0 ) );
-		AddUnit( roguechessTeam.Red, UnitType.Buddy, new GridPos( 2, 0 ) );
-		AddUnit( roguechessTeam.Red, UnitType.Shooter, new GridPos( 4, 0 ) );
+		AddUnit( RogueChessTeam.Blue, UnitType.Commander, new GridPos( 3, 7 ) );
+		AddUnit( RogueChessTeam.Blue, UnitType.Buddy, new GridPos( 2, 7 ) );
+		AddUnit( RogueChessTeam.Blue, UnitType.Shooter, new GridPos( 4, 7 ) );
+		AddUnit( RogueChessTeam.Red, UnitType.Commander, new GridPos( 3, 0 ) );
+		AddUnit( RogueChessTeam.Red, UnitType.Buddy, new GridPos( 2, 0 ) );
+		AddUnit( RogueChessTeam.Red, UnitType.Shooter, new GridPos( 4, 0 ) );
 
-		StartTurn( roguechessTeam.Blue );
+		StartTurn( RogueChessTeam.Blue );
 	}
 
-	public void SetMode( roguechessMode mode )
+	public void SetMode( RogueChessMode mode )
 	{
 		Mode = mode;
 
@@ -155,9 +155,9 @@ public sealed class roguechessGameComponent : Component
 
 		StatusMessage = Mode switch
 		{
-			roguechessMode.PlayerVsComputer => "Mode: Player vs Computer. Blue is human and Red is computer.",
-			roguechessMode.PlayerVsPlayer => "Mode: Player vs Player. Both sides are controlled by people.",
-			roguechessMode.ComputerVsComputer => "Mode: Computer vs Computer. Both sides will play automatically.",
+			RogueChessMode.PlayerVsComputer => "Mode: Player vs Computer. Blue is human and Red is computer.",
+			RogueChessMode.PlayerVsPlayer => "Mode: Player vs Player. Both sides are controlled by people.",
+			RogueChessMode.ComputerVsComputer => "Mode: Computer vs Computer. Both sides will play automatically.",
 			_ => StatusMessage
 		};
 
@@ -167,7 +167,7 @@ public sealed class roguechessGameComponent : Component
 
 	public void HandleTurnButton()
 	{
-		if ( Mode == roguechessMode.ComputerVsComputer )
+		if ( Mode == RogueChessMode.ComputerVsComputer )
 		{
 			StopPvcGame();
 			return;
@@ -178,10 +178,10 @@ public sealed class roguechessGameComponent : Component
 
 	public void StopPvcGame()
 	{
-		if ( Mode != roguechessMode.ComputerVsComputer )
+		if ( Mode != RogueChessMode.ComputerVsComputer )
 			return;
 
-		Mode = roguechessMode.PlayerVsComputer;
+		Mode = RogueChessMode.PlayerVsComputer;
 		ClearSelection();
 		StatusMessage = "PVC game stopped.";
 		MarkDirty();
@@ -261,7 +261,7 @@ public sealed class roguechessGameComponent : Component
 		MarkDirty();
 	}
 
-	public void SelectCard( roguechessTeam team, int index )
+	public void SelectCard( RogueChessTeam team, int index )
 	{
 		if ( Winner is not null || IsCurrentAiTurn() )
 			return;
@@ -342,7 +342,7 @@ public sealed class roguechessGameComponent : Component
 		if ( unit is not null )
 		{
 			classes.Add( "occupied" );
-			classes.Add( unit.Team == roguechessTeam.Blue ? "blue-unit" : "red-unit" );
+			classes.Add( unit.Team == RogueChessTeam.Blue ? "blue-unit" : "red-unit" );
 			if ( unit.Id == SelectedUnitId )
 				classes.Add( "selected" );
 		}
@@ -434,9 +434,9 @@ public sealed class roguechessGameComponent : Component
 		return "";
 	}
 
-	public string GetPieceImageClass( roguechessTeam team, UnitType type )
+	public string GetPieceImageClass( RogueChessTeam team, UnitType type )
 	{
-		if ( team == roguechessTeam.Blue )
+		if ( team == RogueChessTeam.Blue )
 		{
 			return type switch
 			{
@@ -456,7 +456,7 @@ public sealed class roguechessGameComponent : Component
 		};
 	}
 
-	public string GetCardClass( roguechessTeam team, int index )
+	public string GetCardClass( RogueChessTeam team, int index )
 	{
 		var classes = new List<string> { "card" };
 		var hand = GetHand( team );
@@ -475,14 +475,14 @@ public sealed class roguechessGameComponent : Component
 		return string.Join( " ", classes );
 	}
 
-	public string TeamName( roguechessTeam team )
+	public string TeamName( RogueChessTeam team )
 	{
-		return team == roguechessTeam.Blue ? "Blue" : "Red";
+		return team == RogueChessTeam.Blue ? "Blue" : "Red";
 	}
 
-	public int GetScrap( roguechessTeam team )
+	public int GetScrap( RogueChessTeam team )
 	{
-		return team == roguechessTeam.Blue ? BlueScrap : RedScrap;
+		return team == RogueChessTeam.Blue ? BlueScrap : RedScrap;
 	}
 
 	public bool IsCurrentAiTurn()
@@ -490,17 +490,17 @@ public sealed class roguechessGameComponent : Component
 		return IsComputerControlled( CurrentTeam ) && Winner is null;
 	}
 
-	public bool IsComputerControlled( roguechessTeam team )
+	public bool IsComputerControlled( RogueChessTeam team )
 	{
 		return Mode switch
 		{
-			roguechessMode.PlayerVsComputer => team == roguechessTeam.Red,
-			roguechessMode.ComputerVsComputer => true,
+			RogueChessMode.PlayerVsComputer => team == RogueChessTeam.Red,
+			RogueChessMode.ComputerVsComputer => true,
 			_ => false
 		};
 	}
 
-	public bool IsHumanControlled( roguechessTeam team )
+	public bool IsHumanControlled( RogueChessTeam team )
 	{
 		return !IsComputerControlled( team );
 	}
@@ -517,7 +517,7 @@ public sealed class roguechessGameComponent : Component
 		}
 	}
 
-	void StartTurn( roguechessTeam team )
+	void StartTurn( RogueChessTeam team )
 	{
 		CurrentTeam = team;
 		UnitActionSpent = false;
@@ -549,23 +549,23 @@ public sealed class roguechessGameComponent : Component
 			nextAiActionTime = Time.Now + 0.65f;
 	}
 
-	void DrawCard( roguechessTeam team )
+	void DrawCard( RogueChessTeam team )
 	{
 		var hand = GetHand( team );
 		if ( hand.Count >= HandLimit )
 			return;
 
-		var deckIndex = team == roguechessTeam.Blue ? blueDeckIndex : redDeckIndex;
+		var deckIndex = team == RogueChessTeam.Blue ? blueDeckIndex : redDeckIndex;
 		hand.Add( DeckOrder[deckIndex % DeckOrder.Length] );
 		deckIndex++;
 
-		if ( team == roguechessTeam.Blue )
+		if ( team == RogueChessTeam.Blue )
 			blueDeckIndex = deckIndex;
 		else
 			redDeckIndex = deckIndex;
 	}
 
-	UnitData AddUnit( roguechessTeam team, UnitType type, GridPos position, bool canActThisTurn = true )
+	UnitData AddUnit( RogueChessTeam team, UnitType type, GridPos position, bool canActThisTurn = true )
 	{
 		var unit = new UnitData( nextUnitId++, team, type, position )
 		{
@@ -770,7 +770,7 @@ public sealed class roguechessGameComponent : Component
 		return true;
 	}
 
-	bool TryPlayCardAt( roguechessTeam team, CardType card, GridPos pos )
+	bool TryPlayCardAt( RogueChessTeam team, CardType card, GridPos pos )
 	{
 		var data = CardData.All[card];
 		if ( GetScrap( team ) < data.Cost )
@@ -784,7 +784,7 @@ public sealed class roguechessGameComponent : Component
 		return true;
 	}
 
-	bool ApplyCardEffect( roguechessTeam team, CardType card, GridPos pos )
+	bool ApplyCardEffect( RogueChessTeam team, CardType card, GridPos pos )
 	{
 		var target = GetUnitAt( pos );
 
@@ -852,7 +852,7 @@ public sealed class roguechessGameComponent : Component
 		return IsValidCardTarget( CurrentTeam, hand[SelectedCardIndex], pos );
 	}
 
-	bool IsValidCardTarget( roguechessTeam team, CardType card, GridPos pos )
+	bool IsValidCardTarget( RogueChessTeam team, CardType card, GridPos pos )
 	{
 		var target = GetUnitAt( pos );
 		var commander = GetCommander( team );
@@ -869,7 +869,7 @@ public sealed class roguechessGameComponent : Component
 		};
 	}
 
-	bool TryGetPushDestination( roguechessTeam team, UnitData enemy, out GridPos destination )
+	bool TryGetPushDestination( RogueChessTeam team, UnitData enemy, out GridPos destination )
 	{
 		var selected = GetSelectedUnit();
 		if ( selected is not null && selected.Team == team && selected.CanActThisTurn && TryGetPushDestinationFromSource( selected, enemy, out destination ) )
@@ -991,7 +991,7 @@ public sealed class roguechessGameComponent : Component
 		}
 	}
 
-	void TryAiBuildBuddy( roguechessTeam team )
+	void TryAiBuildBuddy( RogueChessTeam team )
 	{
 		if ( CardPlayed || GetScrap( team ) < CardData.All[CardType.BuildBuddy].Cost )
 			return;
@@ -1025,7 +1025,7 @@ public sealed class roguechessGameComponent : Component
 		}
 	}
 
-	void TryAiUnitAction( roguechessTeam team )
+	void TryAiUnitAction( RogueChessTeam team )
 	{
 		var enemyTeam = OtherTeam( team );
 		var enemyCommander = GetCommander( enemyTeam );
@@ -1083,17 +1083,17 @@ public sealed class roguechessGameComponent : Component
 
 	void CheckCommanderVictory()
 	{
-		var blueCommander = GetCommander( roguechessTeam.Blue );
-		var redCommander = GetCommander( roguechessTeam.Red );
+		var blueCommander = GetCommander( RogueChessTeam.Blue );
+		var redCommander = GetCommander( RogueChessTeam.Red );
 
 		if ( blueCommander is not null && blueCommander.Health <= 0 )
-			Winner = roguechessTeam.Red;
+			Winner = RogueChessTeam.Red;
 
 		if ( redCommander is not null && redCommander.Health <= 0 )
-			Winner = roguechessTeam.Blue;
+			Winner = RogueChessTeam.Blue;
 	}
 
-	void ClearEndOfTurnBonuses( roguechessTeam team )
+	void ClearEndOfTurnBonuses( RogueChessTeam team )
 	{
 		foreach ( var unit in units.Where( unit => unit.Team == team ) )
 		{
@@ -1108,17 +1108,17 @@ public sealed class roguechessGameComponent : Component
 		SelectedCardIndex = -1;
 	}
 
-	void SetScrap( roguechessTeam team, int value )
+	void SetScrap( RogueChessTeam team, int value )
 	{
-		if ( team == roguechessTeam.Blue )
+		if ( team == RogueChessTeam.Blue )
 			BlueScrap = value;
 		else
 			RedScrap = value;
 	}
 
-	List<CardType> GetHand( roguechessTeam team )
+	List<CardType> GetHand( RogueChessTeam team )
 	{
-		return team == roguechessTeam.Blue ? blueHand : redHand;
+		return team == RogueChessTeam.Blue ? blueHand : redHand;
 	}
 
 	UnitData GetUnitAt( GridPos pos )
@@ -1126,14 +1126,14 @@ public sealed class roguechessGameComponent : Component
 		return units.FirstOrDefault( unit => unit.Position == pos );
 	}
 
-	UnitData GetCommander( roguechessTeam team )
+	UnitData GetCommander( RogueChessTeam team )
 	{
 		return units.FirstOrDefault( unit => unit.Team == team && unit.Type == UnitType.Commander );
 	}
 
-	roguechessTeam OtherTeam( roguechessTeam team )
+	RogueChessTeam OtherTeam( RogueChessTeam team )
 	{
-		return team == roguechessTeam.Blue ? roguechessTeam.Red : roguechessTeam.Blue;
+		return team == RogueChessTeam.Blue ? RogueChessTeam.Red : RogueChessTeam.Blue;
 	}
 
 	string FormatPos( GridPos pos )
@@ -1148,5 +1148,5 @@ public sealed class roguechessGameComponent : Component
 	}
 
 	readonly record struct BoardEffect( GridPos Position, string EffectType, float StartTime, float EndTime );
-	readonly record struct DyingUnitVisual( GridPos Position, UnitType UnitType, roguechessTeam Team, float StartTime, float EndTime );
+	readonly record struct DyingUnitVisual( GridPos Position, UnitType UnitType, RogueChessTeam Team, float StartTime, float EndTime );
 }

@@ -10,7 +10,7 @@
 	<div class="game-ui">
 	@if ( Game is null )
 	{
-		<div class="missing">Attach roguechessGameComponent or assign Game on this panel.</div>
+		<div class="missing">Attach RogueChessGameComponent or assign Game on this panel.</div>
 	}
 	else
 	{
@@ -141,7 +141,7 @@
 			</div>
 
 			<div class="play-area">
-				<div class="hand-panel blue-hand @(Game.CurrentTeam == roguechessTeam.Blue ? "active-hand" : "inactive-hand")">
+				<div class="hand-panel blue-hand @(Game.CurrentTeam == RogueChessTeam.Blue ? "active-hand" : "inactive-hand")">
 					<div class="hand-info">
 						<div class="hand-title">Blue Player</div>
 						<div class="side-scrap">Scrap: @Game.BlueScrap</div>
@@ -152,9 +152,9 @@
 						var card = Game.BlueHand[i];
 						var index = i;
 						var visual = CardData.Visuals[card];
-						var cardImageClass = GetCardImageClass( card, roguechessTeam.Blue );
-						var expanded = Game.CurrentTeam == roguechessTeam.Blue && Game.SelectedCardIndex == index;
-						<div class="@(Game.GetCardClass( roguechessTeam.Blue, index ) + " " + visual.ArtClass)" onclick=@( () => Game.SelectCard( roguechessTeam.Blue, index ) )>
+						var cardImageClass = GetCardImageClass( card, RogueChessTeam.Blue );
+						var expanded = Game.CurrentTeam == RogueChessTeam.Blue && Game.SelectedCardIndex == index;
+						<div class="@(Game.GetCardClass( RogueChessTeam.Blue, index ) + " " + visual.ArtClass)" onclick=@( () => Game.SelectCard( RogueChessTeam.Blue, index ) )>
 							<div class="card-shine"></div>
 							<div class="collapsed-row">
 								<div class="card-thumb">
@@ -190,10 +190,10 @@
 				<div class="center">
 					<div class="board-balance-spacer"></div>
 					<div class="board">
-						@for ( var y = 0; y < roguechessGameComponent.BoardSize; y++ )
+						@for ( var y = 0; y < RogueChessGameComponent.BoardSize; y++ )
 						{
 							<div class="board-row">
-								@for ( var x = 0; x < roguechessGameComponent.BoardSize; x++ )
+								@for ( var x = 0; x < RogueChessGameComponent.BoardSize; x++ )
 								{
 									var tileX = x;
 									var tileY = y;
@@ -265,9 +265,9 @@
 							<div class="action-button" onclick=@Game.HandleTurnButton>@TurnButtonText</div>
 							<div class="action-button" onclick=@Game.RestartMatch>Restart Match</div>
 							<div class="mode-button-row">
-								<div class="@GetModeButtonClass( roguechessMode.PlayerVsPlayer )" onclick=@( () => Game.SetMode( roguechessMode.PlayerVsPlayer ) )>PVP</div>
-								<div class="@GetModeButtonClass( roguechessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( roguechessMode.PlayerVsComputer ) )>PVE</div>
-								<div class="@GetModeButtonClass( roguechessMode.ComputerVsComputer )" onclick=@( () => Game.SetMode( roguechessMode.ComputerVsComputer ) )>PVC</div>
+								<div class="@GetModeButtonClass( RogueChessMode.PlayerVsPlayer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsPlayer ) )>PVP</div>
+								<div class="@GetModeButtonClass( RogueChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsComputer ) )>PVE</div>
+								<div class="@GetModeButtonClass( RogueChessMode.ComputerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.ComputerVsComputer ) )>PVC</div>
 							</div>
 							@if ( Game.SelectedCardIndex >= 0 )
 							{
@@ -281,7 +281,7 @@
 					</div>
 				</div>
 
-				<div class="hand-panel red-hand @(Game.CurrentTeam == roguechessTeam.Red ? "active-hand" : "inactive-hand")">
+				<div class="hand-panel red-hand @(Game.CurrentTeam == RogueChessTeam.Red ? "active-hand" : "inactive-hand")">
 					<div class="hand-info">
 						<div class="hand-title">Red Player</div>
 						<div class="side-scrap">Scrap: @Game.RedScrap</div>
@@ -292,9 +292,9 @@
 						var card = Game.RedHand[i];
 						var index = i;
 						var visual = CardData.Visuals[card];
-						var cardImageClass = GetCardImageClass( card, roguechessTeam.Red );
-						var expanded = Game.CurrentTeam == roguechessTeam.Red && Game.SelectedCardIndex == index;
-						<div class="@(Game.GetCardClass( roguechessTeam.Red, index ) + " " + visual.ArtClass)" onclick=@( () => Game.SelectCard( roguechessTeam.Red, index ) )>
+						var cardImageClass = GetCardImageClass( card, RogueChessTeam.Red );
+						var expanded = Game.CurrentTeam == RogueChessTeam.Red && Game.SelectedCardIndex == index;
+						<div class="@(Game.GetCardClass( RogueChessTeam.Red, index ) + " " + visual.ArtClass)" onclick=@( () => Game.SelectCard( RogueChessTeam.Red, index ) )>
 							<div class="card-shine"></div>
 							<div class="collapsed-row">
 								<div class="card-thumb">
@@ -334,29 +334,29 @@
 
 @code
 {
-	[Parameter] public roguechessGameComponent Game { get; set; }
+	[Parameter] public RogueChessGameComponent Game { get; set; }
 	bool ShowIntro { get; set; } = true;
 	int IntroPage { get; set; }
 	const int IntroPageCount = 7;
 	string IntroBackClass => IntroPage == 0 ? "nav-button disabled" : "nav-button";
 	string ModeText => Game?.Mode switch
 	{
-		roguechessMode.PlayerVsComputer => "Player vs Computer: Blue human, Red CPU",
-		roguechessMode.PlayerVsPlayer => "Player vs Player: both human",
-		roguechessMode.ComputerVsComputer => "Computer vs Computer: both CPU",
+		RogueChessMode.PlayerVsComputer => "Player vs Computer: Blue human, Red CPU",
+		RogueChessMode.PlayerVsPlayer => "Player vs Player: both human",
+		RogueChessMode.ComputerVsComputer => "Computer vs Computer: both CPU",
 		_ => ""
 	};
 
-	string TurnButtonText => Game?.Mode == roguechessMode.ComputerVsComputer ? "Stop Game" : "End Turn";
+	string TurnButtonText => Game?.Mode == RogueChessMode.ComputerVsComputer ? "Stop Game" : "End Turn";
 
-	string GetModeButtonClass( roguechessMode mode )
+	string GetModeButtonClass( RogueChessMode mode )
 	{
 		return Game?.Mode == mode ? "mode-button active" : "mode-button";
 	}
 
 	string GetPieceImageClass( UnitData unit )
 	{
-		if ( unit.Team == roguechessTeam.Blue )
+		if ( unit.Team == RogueChessTeam.Blue )
 		{
 			return unit.Type switch
 			{
@@ -376,9 +376,9 @@
 		};
 	}
 
-	string GetCardImageClass( CardType cardType, roguechessTeam team )
+	string GetCardImageClass( CardType cardType, RogueChessTeam team )
 	{
-		if ( team == roguechessTeam.Blue )
+		if ( team == RogueChessTeam.Blue )
 		{
 			return cardType switch
 			{

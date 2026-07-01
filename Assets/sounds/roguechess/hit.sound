@@ -5,7 +5,7 @@
   "Decibels": 70,
   "SelectionMode": "Random",
   "Sounds": [
-    "sounds/scrapchess/hit.vsnd"
+    "sounds/roguechess/hit.vsnd"
   ],
   "OcclusionEnabled": true,
   "Occlusion": true,

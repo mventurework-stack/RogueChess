@@ -2,10 +2,10 @@ Scrap Chess - Network Foundation Patch
 
 Replace these files in the same project locations:
 
-- roguechessGameComponent.cs
-- roguechessTypes.cs
-- roguechessPanel.razor
-- roguechessPanel.razor.scss
+- RogueChessGameComponent.cs
+- RogueChessTypes.cs
+- RogueChessPanel.razor
+- RogueChessPanel.razor.scss
 
 What this patch does:
 
