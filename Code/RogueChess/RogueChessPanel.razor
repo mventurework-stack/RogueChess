@@ -267,7 +267,7 @@
 								<span>@Game.StatusMessage</span>
 							}
 						</div>
-						@if ( Game.Winner is null )
+						@if ( Game.Winner is null && Game.Mode != RogueChessMode.ComputerVsComputer )
 						{
 							<div class="difficulty-panel">
 								<div class="difficulty-title">CPU Difficulty</div>
@@ -366,7 +366,7 @@
 	{
 		RogueChessMode.PlayerVsComputer => "Player vs Computer: Blue human, Red CPU",
 		RogueChessMode.PlayerVsPlayer => "Player vs Player: both human",
-		RogueChessMode.ComputerVsComputer => "Computer vs Computer: both CPU",
+		RogueChessMode.ComputerVsComputer => $"Computer vs Computer — Blue: {Game.DifficultyFor( RogueChessTeam.Blue )}, Red: {Game.DifficultyFor( RogueChessTeam.Red )}",
 		_ => ""
 	};
 
