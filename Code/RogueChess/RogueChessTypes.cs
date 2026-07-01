@@ -32,7 +32,8 @@ public enum CardType
 	Focus,
 	Sprint,
 	BuildBuddy,
-	Repair
+	Repair,
+	Reboot
 }
 
 public readonly record struct GridPos( int X, int Y )
@@ -74,6 +75,8 @@ public sealed class UnitData
 	public int SprintMoveBonus { get; set; }
 	public int DisabledTurns { get; set; }
 	public bool IsDisabledThisTurn { get; set; }
+	public int? LastDisabledByUnitId { get; set; }
+	public int LastDisabledOnTurn { get; set; } = -1;
 	public bool CanActThisTurn { get; set; } = true;
 
 	public UnitData( int id, RogueChessTeam team, UnitType type, GridPos position )
@@ -86,25 +89,25 @@ public sealed class UnitData
 		switch ( type )
 		{
 			case UnitType.Commander:
-				MaxHealth = 6;
+				MaxHealth = 9;
 				MoveRange = 1;
 				AttackRange = 1;
 				Damage = 1;
 				break;
 			case UnitType.Buddy:
-				MaxHealth = 3;
+				MaxHealth = 6;
 				MoveRange = 2;
 				AttackRange = 1;
 				Damage = 1;
 				break;
 			case UnitType.Shooter:
-				MaxHealth = 2;
+				MaxHealth = 5;
 				MoveRange = 1;
 				AttackRange = 3;
 				Damage = 1;
 				break;
 			case UnitType.Tank:
-				MaxHealth = 5;
+				MaxHealth = 8;
 				MoveRange = 1;
 				AttackRange = 1;
 				Damage = 1;
@@ -142,7 +145,8 @@ public readonly record struct CardData( CardType Type, string Name, int Cost, st
 		[CardType.Focus] = new( CardType.Focus, "Focus", 2, "Choose one friendly unit. Its next attack this turn deals +1 extra damage. Does not protect the unit." ),
 		[CardType.Sprint] = new( CardType.Sprint, "Sprint", 2, "Choose one friendly unit before it moves. It gets +1 move range this turn only. It still cannot attack after moving." ),
 		[CardType.BuildBuddy] = new( CardType.BuildBuddy, "Build Buddy", 3, "Choose an empty tile next to your Commander. Summon a Buddy there. The new Buddy can act next turn." ),
-		[CardType.Repair] = new( CardType.Repair, "Repair", 2, "Choose one damaged friendly unit. Restore 1 Health, up to its maximum Health. Does not add Shield." )
+		[CardType.Repair] = new( CardType.Repair, "Repair", 2, "Choose one damaged friendly unit. Restore 1 Health, up to its maximum Health. Does not add Shield." ),
+		[CardType.Reboot] = new( CardType.Reboot, "Reboot", 1, "Choose one disabled friendly unit. Immediately clear its disabled state so it can move and attack normally this turn." )
 	};
 
 	public static readonly IReadOnlyDictionary<CardType, CardVisualData> Visuals = new Dictionary<CardType, CardVisualData>
@@ -152,7 +156,8 @@ public readonly record struct CardData( CardType Type, string Name, int Cost, st
 		[CardType.Focus] = new( "Attack", "focus-art", "FOC", "One good hit, carefully planned.", "RARE" ),
 		[CardType.Sprint] = new( "Movement", "sprint-art", "RUN", "Little legs. Big plans.", "COMMON" ),
 		[CardType.BuildBuddy] = new( "Summon", "build-art", "BUD", "Backup has entered the board.", "RARE" ),
-		[CardType.Repair] = new( "Support", "repair-art", "FIX", "Duct tape, courage, and one more turn.", "COMMON" )
+		[CardType.Repair] = new( "Support", "repair-art", "FIX", "Duct tape, courage, and one more turn.", "COMMON" ),
+		[CardType.Reboot] = new( "Support", "reboot-art", "RBT", "Wakes a frozen friend right back up.", "COMMON" )
 	};
 }
 

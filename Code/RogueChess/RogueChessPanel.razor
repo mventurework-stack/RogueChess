@@ -270,6 +270,7 @@
 			{
 				<div class="winner-overlay">
 					<div class="winner-banner @(Game.Winner.Value == RogueChessTeam.Blue ? "winner-blue" : "winner-red")">@Game.TeamName( Game.Winner.Value ) Wins!</div>
+					<div class="winner-reason">@WinnerReasonText</div>
 				</div>
 			}
 			<div class="topbar">
@@ -396,7 +397,7 @@
 						<div class="status">
 							@if ( Game.Winner is not null )
 							{
-								<span>@Game.TeamName( Game.Winner.Value ) wins. Restart to play again.</span>
+								<span>@Game.StatusMessage</span>
 							}
 							else
 							{
@@ -411,10 +412,6 @@
 							else
 							{
 								<div class="action-button" onclick=@Game.HandleTurnButton>@TurnButtonText</div>
-								@if ( CanShowHackerSpecial() )
-								{
-									<div class="@SpecialButtonClass" onclick=@Game.ToggleSpecialAction>@SpecialButtonText</div>
-								}
 								<div class="action-button" onclick=@Game.RestartMatch>Restart Match</div>
 								<div class="mode-button-row">
 									<div class="@GetModeButtonClass( RogueChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsComputer ) )>PVE</div>
@@ -504,8 +501,12 @@
 	};
 
 	string TurnButtonText => Game?.Mode == RogueChessMode.ComputerVsComputer ? "Stop Game" : "End Turn [Space]";
-	string SpecialButtonText => Game?.SpecialActionSelected == true ? "Cancel Disable" : "Disable";
-	string SpecialButtonClass => Game?.SpecialActionSelected == true ? "action-button special active" : "action-button special";
+	string WinnerReasonText => Game?.WinReason switch
+	{
+		"elimination" => "Enemy army wiped out",
+		"knockout" => "Enemy Commander down",
+		_ => ""
+	};
 
 	void TryStartMatch()
 	{
@@ -639,17 +640,6 @@
 			&& Game.Mode != RogueChessMode.ComputerVsComputer;
 	}
 
-	bool CanShowHackerSpecial()
-	{
-		var selected = Game?.GetSelectedUnit();
-		return selected is not null
-			&& selected.Type == UnitType.Hacker
-			&& selected.Team == Game.CurrentTeam
-			&& selected.CanActThisTurn
-			&& !Game.UnitActionSpent
-			&& !Game.IsCurrentAiTurn();
-	}
-
 	string GetModeButtonClass( RogueChessMode mode )
 	{
 		return Game?.Mode == mode ? "mode-button active" : "mode-button";
@@ -698,6 +688,7 @@
 				CardType.Sprint => "card-image-sprint-blue",
 				CardType.BuildBuddy => "card-image-build-buddy-blue",
 				CardType.Repair => "card-image-repair-blue",
+				CardType.Reboot => "card-image-repair-blue", // placeholder art (no dedicated Reboot asset yet)
 				_ => ""
 			};
 		}
@@ -710,6 +701,7 @@
 			CardType.Sprint => "card-image-sprint-red",
 			CardType.BuildBuddy => "card-image-build-buddy-red",
 			CardType.Repair => "card-image-repair-red",
+			CardType.Reboot => "card-image-repair-red", // placeholder art (no dedicated Reboot asset yet)
 			_ => ""
 		};
 	}
