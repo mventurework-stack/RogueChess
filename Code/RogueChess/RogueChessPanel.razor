@@ -133,6 +133,12 @@
 		}
 		else
 		{
+			@if ( Game.Winner is not null )
+			{
+				<div class="winner-overlay">
+					<div class="winner-banner @(Game.Winner.Value == RogueChessTeam.Blue ? "winner-blue" : "winner-red")">@Game.TeamName( Game.Winner.Value ) Wins!</div>
+				</div>
+			}
 			<div class="topbar">
 				<div class="brand">Scrap Chess Buddies</div>
 				<div class="turn @Game.CurrentTeam.ToString().ToLower()">@Game.TeamName( Game.CurrentTeam ) Turn</div>
