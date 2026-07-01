@@ -575,6 +575,8 @@ public sealed class RogueChessGameComponent : Component
 		}
 
 		var scrapGain = 1 + units.Count( unit => unit.Team == team && ResourceTiles.Contains( unit.Position ) );
+		if ( Difficulty == AiDifficulty.Hard && IsComputerControlled( team ) )
+			scrapGain += 1;
 		SetScrap( team, GetScrap( team ) + scrapGain );
 		DrawCard( team );
 
@@ -591,15 +593,16 @@ public sealed class RogueChessGameComponent : Component
 
 	float AiActionDelay => Difficulty switch
 	{
-		AiDifficulty.Beginner => 1.4f,
-		AiDifficulty.Hard => 0.4f,
+		AiDifficulty.Intermediate => 0.5f,
+		AiDifficulty.Hard => 0.3f,
 		_ => 0.65f
 	};
 
-	bool ShouldAiAttack()
-	{
-		return Difficulty != AiDifficulty.Beginner || TurnNumber % 3 == 0;
-	}
+	// Intermediate and Hard attack any enemy in range before collecting Scrap.
+	bool AiAttacksBeforeResources => Difficulty != AiDifficulty.Beginner;
+
+	// Intermediate and Hard reinforce whenever they can afford it.
+	bool AiBuildsEagerly => Difficulty != AiDifficulty.Beginner;
 
 	void DrawCard( RogueChessTeam team )
 	{
@@ -1059,13 +1062,6 @@ public sealed class RogueChessGameComponent : Component
 		if ( CardPlayed )
 			return;
 
-		if ( Difficulty == AiDifficulty.Beginner )
-		{
-			if ( TurnNumber % 4 == 0 )
-				TryAiBuildBuddy( team );
-			return;
-		}
-
 		if ( TryAiPlayFocus( team ) ) return;
 		if ( TryAiPlayGuard( team ) ) return;
 		if ( TryAiPlayRepair( team ) ) return;
@@ -1152,7 +1148,7 @@ public sealed class RogueChessGameComponent : Component
 			return false;
 
 		var enemyTeam = OtherTeam( team );
-		var shouldBuild = units.Count( unit => unit.Team == team ) < units.Count( unit => unit.Team == enemyTeam ) || TurnNumber % 3 == 0;
+		var shouldBuild = AiBuildsEagerly || units.Count( unit => unit.Team == team ) < units.Count( unit => unit.Team == enemyTeam ) || TurnNumber % 3 == 0;
 		if ( !shouldBuild )
 			return false;
 
@@ -1208,52 +1204,35 @@ public sealed class RogueChessGameComponent : Component
 		if ( enemyCommander is null )
 			return;
 
-		if ( ShouldAiAttack() )
+		// Always go for the enemy Commander or a guaranteed kill first.
+		foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
 		{
-			foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
+			if ( IsLegalAttack( attacker, enemyCommander ) )
 			{
-				if ( IsLegalAttack( attacker, enemyCommander ) )
-				{
-					AttackUnit( attacker, enemyCommander );
-					return;
-				}
-			}
-
-			foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
-			{
-				var killTarget = units.FirstOrDefault( unit => unit.Team == enemyTeam && IsLegalAttack( attacker, unit ) && unit.Health <= attacker.CurrentDamage );
-				if ( killTarget is not null )
-				{
-					AttackUnit( attacker, killTarget );
-					return;
-				}
-			}
-		}
-
-		foreach ( var unit in units.Where( unit => unit.Team == team ).ToList() )
-		{
-			var resourceMove = GetAiProgressMoves( unit, enemyCommander.Position )
-				.Where( pos => ResourceTiles.Contains( pos ) )
-				.OrderBy( pos => pos.ManhattanDistance( enemyCommander.Position ) )
-				.FirstOrDefault();
-			if ( ResourceTiles.Contains( resourceMove ) )
-			{
-				MoveUnit( unit, resourceMove );
+				AttackUnit( attacker, enemyCommander );
 				return;
 			}
 		}
 
-		if ( ShouldAiAttack() )
+		foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
 		{
-			foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
+			var killTarget = units.FirstOrDefault( unit => unit.Team == enemyTeam && IsLegalAttack( attacker, unit ) && unit.Health <= attacker.CurrentDamage );
+			if ( killTarget is not null )
 			{
-				var target = units.FirstOrDefault( unit => unit.Team == enemyTeam && IsLegalAttack( attacker, unit ) );
-				if ( target is not null )
-				{
-					AttackUnit( attacker, target );
-					return;
-				}
+				AttackUnit( attacker, killTarget );
+				return;
 			}
+		}
+
+		if ( AiAttacksBeforeResources )
+		{
+			if ( TryAiAttackAnyEnemy( team, enemyTeam ) ) return;
+			if ( TryAiCollectResource( team, enemyCommander ) ) return;
+		}
+		else
+		{
+			if ( TryAiCollectResource( team, enemyCommander ) ) return;
+			if ( TryAiAttackAnyEnemy( team, enemyTeam ) ) return;
 		}
 
 		var bestMove = units
@@ -1264,6 +1243,39 @@ public sealed class RogueChessGameComponent : Component
 
 		if ( bestMove is not null )
 			MoveUnit( bestMove.Unit, bestMove.Pos );
+	}
+
+	bool TryAiAttackAnyEnemy( RogueChessTeam team, RogueChessTeam enemyTeam )
+	{
+		foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
+		{
+			var target = units.FirstOrDefault( unit => unit.Team == enemyTeam && IsLegalAttack( attacker, unit ) );
+			if ( target is not null )
+			{
+				AttackUnit( attacker, target );
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool TryAiCollectResource( RogueChessTeam team, UnitData enemyCommander )
+	{
+		foreach ( var unit in units.Where( unit => unit.Team == team ).ToList() )
+		{
+			var resourceMove = GetAiProgressMoves( unit, enemyCommander.Position )
+				.Where( pos => ResourceTiles.Contains( pos ) )
+				.OrderBy( pos => pos.ManhattanDistance( enemyCommander.Position ) )
+				.FirstOrDefault();
+			if ( ResourceTiles.Contains( resourceMove ) )
+			{
+				MoveUnit( unit, resourceMove );
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	List<GridPos> GetAiProgressMoves( UnitData unit, GridPos enemyTarget )
