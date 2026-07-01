@@ -16,6 +16,7 @@ public sealed class RogueChessGameComponent : Component
 {
 	public const int BoardSize = 8;
 	const int HandLimit = 5;
+	const int StalemateTurnLimit = 30;
 	const float HitEffectDuration = 1.0f;
 	const float DeathEffectDuration = 1.0f;
 	const float UnitSoundVolume = 0.45f;
@@ -52,6 +53,8 @@ public sealed class RogueChessGameComponent : Component
 	public RogueChessMode Mode { get; private set; } = RogueChessMode.PlayerVsComputer;
 	public RogueChessTeam CurrentTeam { get; private set; }
 	public RogueChessTeam? Winner { get; private set; }
+	public bool IsDraw { get; private set; }
+	public bool IsGameOver => Winner is not null || IsDraw;
 	public int BlueScrap { get; private set; }
 	public int RedScrap { get; private set; }
 	public bool UnitActionSpent { get; private set; }
@@ -79,6 +82,8 @@ public sealed class RogueChessGameComponent : Component
 	string lastAiAction = "";
 	float nextAiActionTime;
 	float nextBackgroundSoundRetryTime;
+	int turnsSinceLastAttack;
+	readonly Dictionary<int, GridPos> previousTileByUnit = new();
 	SoundHandle backgroundSoundHandle;
 	ScreenPanel screenPanel;
 	RogueChessPanel uiPanel;
@@ -136,6 +141,9 @@ public sealed class RogueChessGameComponent : Component
 		RedScrap = 0;
 		Winner = null;
 		TurnNumber = 0;
+		IsDraw = false;
+		turnsSinceLastAttack = 0;
+		previousTileByUnit.Clear();
 
 		AddUnit( RogueChessTeam.Blue, UnitType.Commander, new GridPos( 3, 7 ) );
 		AddUnit( RogueChessTeam.Blue, UnitType.Buddy, new GridPos( 2, 7 ) );
@@ -189,7 +197,7 @@ public sealed class RogueChessGameComponent : Component
 
 	public void EndTurn()
 	{
-		if ( Winner is not null || IsCurrentAiTurn() )
+		if ( IsGameOver || IsCurrentAiTurn() )
 			return;
 
 		AdvanceTurn( true );
@@ -197,7 +205,7 @@ public sealed class RogueChessGameComponent : Component
 
 	public void ClickTile( int x, int y )
 	{
-		if ( Winner is not null || IsCurrentAiTurn() )
+		if ( IsGameOver || IsCurrentAiTurn() )
 			return;
 
 		var pos = new GridPos( x, y );
@@ -263,7 +271,7 @@ public sealed class RogueChessGameComponent : Component
 
 	public void SelectCard( RogueChessTeam team, int index )
 	{
-		if ( Winner is not null || IsCurrentAiTurn() )
+		if ( IsGameOver || IsCurrentAiTurn() )
 			return;
 
 		if ( team != CurrentTeam )
@@ -487,7 +495,7 @@ public sealed class RogueChessGameComponent : Component
 
 	public bool IsCurrentAiTurn()
 	{
-		return IsComputerControlled( CurrentTeam ) && Winner is null;
+		return IsComputerControlled( CurrentTeam ) && !IsGameOver;
 	}
 
 	public bool IsComputerControlled( RogueChessTeam team )
@@ -525,6 +533,15 @@ public sealed class RogueChessGameComponent : Component
 		SelectedCardIndex = -1;
 		SelectedUnitId = -1;
 		TurnNumber++;
+		turnsSinceLastAttack++;
+
+		if ( turnsSinceLastAttack >= StalemateTurnLimit )
+		{
+			IsDraw = true;
+			StatusMessage = "Stalemate — no attacks for many turns. The match is a draw. Press Restart Match to play again.";
+			MarkDirty();
+			return;
+		}
 
 		foreach ( var unit in units.Where( unit => unit.Team == team ) )
 		{
@@ -579,6 +596,7 @@ public sealed class RogueChessGameComponent : Component
 	void MoveUnit( UnitData unit, GridPos destination )
 	{
 		var from = unit.Position;
+		previousTileByUnit[unit.Id] = from;
 		unit.Position = destination;
 		unit.SprintMoveBonus = 0;
 		UnitActionSpent = true;
@@ -593,6 +611,7 @@ public sealed class RogueChessGameComponent : Component
 
 	void AttackUnit( UnitData attacker, UnitData defender )
 	{
+		turnsSinceLastAttack = 0;
 		var damage = attacker.CurrentDamage;
 		var shieldAbsorb = Math.Min( defender.Shield, damage );
 		defender.Shield -= shieldAbsorb;
@@ -975,7 +994,7 @@ public sealed class RogueChessGameComponent : Component
 
 		try
 		{
-			TryAiBuildBuddy( team );
+			TryAiPlayCard( team );
 			TryAiUnitAction( team );
 		}
 		finally
@@ -983,7 +1002,7 @@ public sealed class RogueChessGameComponent : Component
 			isRunningAi = false;
 		}
 
-		if ( Winner is null )
+		if ( !IsGameOver )
 		{
 			AdvanceTurn( false );
 			StatusMessage = $"{lastAiAction} {TeamName( CurrentTeam )} turn starts.";
@@ -991,38 +1010,144 @@ public sealed class RogueChessGameComponent : Component
 		}
 	}
 
-	void TryAiBuildBuddy( RogueChessTeam team )
+	void TryAiPlayCard( RogueChessTeam team )
 	{
-		if ( CardPlayed || GetScrap( team ) < CardData.All[CardType.BuildBuddy].Cost )
+		if ( CardPlayed )
 			return;
+
+		if ( TryAiPlayFocus( team ) ) return;
+		if ( TryAiPlayGuard( team ) ) return;
+		if ( TryAiPlayRepair( team ) ) return;
+		if ( TryAiBuildBuddy( team ) ) return;
+		TryAiPlaySprint( team );
+	}
+
+	bool AiPlayCard( RogueChessTeam team, CardType card, GridPos pos )
+	{
+		if ( CardPlayed )
+			return false;
 
 		var hand = GetHand( team );
-		var handIndex = hand.IndexOf( CardType.BuildBuddy );
-		if ( handIndex < 0 )
-			return;
+		var index = hand.IndexOf( card );
+		if ( index < 0 || GetScrap( team ) < CardData.All[card].Cost )
+			return false;
 
+		SelectedCardIndex = index;
+		if ( TryPlaySelectedCardAt( pos ) )
+			return true;
+
+		SelectedCardIndex = -1;
+		return false;
+	}
+
+	bool TryAiPlayFocus( RogueChessTeam team )
+	{
+		var enemyCommander = GetCommander( OtherTeam( team ) );
+		if ( enemyCommander is null )
+			return false;
+
+		var attacker = units.FirstOrDefault( unit => unit.Team == team && IsLegalAttack( unit, enemyCommander ) );
+		if ( attacker is null )
+			return false;
+
+		if ( AiPlayCard( team, CardType.Focus, attacker.Position ) )
+		{
+			lastAiAction = $"{TeamName( team )} computer focused {attacker.Type} for a stronger attack.";
+			return true;
+		}
+
+		return false;
+	}
+
+	bool TryAiPlayGuard( RogueChessTeam team )
+	{
+		var commander = GetCommander( team );
+		if ( commander is null || !IsUnitUnderThreat( commander ) )
+			return false;
+
+		if ( AiPlayCard( team, CardType.Guard, commander.Position ) )
+		{
+			lastAiAction = $"{TeamName( team )} computer guarded its Commander.";
+			return true;
+		}
+
+		return false;
+	}
+
+	bool TryAiPlayRepair( RogueChessTeam team )
+	{
+		var commander = GetCommander( team );
+		var target = ( commander is not null && commander.Health < commander.MaxHealth )
+			? commander
+			: units.Where( unit => unit.Team == team && unit.Health < unit.MaxHealth )
+				.OrderBy( unit => unit.Health )
+				.FirstOrDefault();
+		if ( target is null )
+			return false;
+
+		if ( AiPlayCard( team, CardType.Repair, target.Position ) )
+		{
+			lastAiAction = $"{TeamName( team )} computer repaired {target.Type}.";
+			return true;
+		}
+
+		return false;
+	}
+
+	bool TryAiBuildBuddy( RogueChessTeam team )
+	{
 		var commander = GetCommander( team );
 		if ( commander is null )
-			return;
+			return false;
 
 		var enemyTeam = OtherTeam( team );
 		var shouldBuild = units.Count( unit => unit.Team == team ) < units.Count( unit => unit.Team == enemyTeam ) || TurnNumber % 3 == 0;
 		if ( !shouldBuild )
-			return;
+			return false;
 
 		foreach ( var direction in GridPos.CardinalDirections )
 		{
 			var pos = commander.Position.Offset( direction );
-			if ( pos.IsInsideBoard && GetUnitAt( pos ) is null )
+			if ( pos.IsInsideBoard && GetUnitAt( pos ) is null && AiPlayCard( team, CardType.BuildBuddy, pos ) )
 			{
-				SelectedCardIndex = handIndex;
-				if ( TryPlaySelectedCardAt( pos ) )
-				{
-					lastAiAction = $"{TeamName( team )} computer built a Buddy at {FormatPos( pos )}.";
-					return;
-				}
+				lastAiAction = $"{TeamName( team )} computer built a Buddy at {FormatPos( pos )}.";
+				return true;
 			}
 		}
+
+		return false;
+	}
+
+	bool TryAiPlaySprint( RogueChessTeam team )
+	{
+		var enemyCommander = GetCommander( OtherTeam( team ) );
+		if ( enemyCommander is null )
+			return false;
+
+		if ( units.Any( unit => unit.Team == team && units.Any( e => e.Team != team && IsLegalAttack( unit, e ) ) ) )
+			return false;
+
+		var mover = units
+			.Where( unit => unit.Team == team && GetAiProgressMoves( unit, enemyCommander.Position ).Count > 0 )
+			.OrderBy( unit => unit.Position.ManhattanDistance( enemyCommander.Position ) )
+			.FirstOrDefault();
+		if ( mover is null )
+			return false;
+
+		if ( AiPlayCard( team, CardType.Sprint, mover.Position ) )
+		{
+			lastAiAction = $"{TeamName( team )} computer sprinted {mover.Type}.";
+			return true;
+		}
+
+		return false;
+	}
+
+	bool IsUnitUnderThreat( UnitData unit )
+	{
+		return units.Any( enemy => enemy.Team != unit.Team
+			&& enemy.Position.ManhattanDistance( unit.Position ) <= enemy.AttackRange
+			&& HasLineOfSight( enemy.Position, unit.Position ) );
 	}
 
 	void TryAiUnitAction( RogueChessTeam team )
@@ -1053,8 +1178,11 @@ public sealed class RogueChessGameComponent : Component
 
 		foreach ( var unit in units.Where( unit => unit.Team == team ).ToList() )
 		{
-			var resourceMove = GetLegalMoves( unit ).Where( pos => ResourceTiles.Contains( pos ) ).OrderBy( pos => pos.ManhattanDistance( enemyCommander.Position ) ).FirstOrDefault();
-			if ( resourceMove.IsInsideBoard && ResourceTiles.Contains( resourceMove ) )
+			var resourceMove = GetAiProgressMoves( unit, enemyCommander.Position )
+				.Where( pos => ResourceTiles.Contains( pos ) )
+				.OrderBy( pos => pos.ManhattanDistance( enemyCommander.Position ) )
+				.FirstOrDefault();
+			if ( ResourceTiles.Contains( resourceMove ) )
 			{
 				MoveUnit( unit, resourceMove );
 				return;
@@ -1073,12 +1201,23 @@ public sealed class RogueChessGameComponent : Component
 
 		var bestMove = units
 			.Where( unit => unit.Team == team )
-			.SelectMany( unit => GetLegalMoves( unit ).Select( pos => new { Unit = unit, Pos = pos, Distance = pos.ManhattanDistance( enemyCommander.Position ) } ) )
+			.SelectMany( unit => GetAiProgressMoves( unit, enemyCommander.Position ).Select( pos => new { Unit = unit, Pos = pos, Distance = pos.ManhattanDistance( enemyCommander.Position ) } ) )
 			.OrderBy( move => move.Distance )
 			.FirstOrDefault();
 
 		if ( bestMove is not null )
 			MoveUnit( bestMove.Unit, bestMove.Pos );
+	}
+
+	List<GridPos> GetAiProgressMoves( UnitData unit, GridPos enemyTarget )
+	{
+		var currentDistance = unit.Position.ManhattanDistance( enemyTarget );
+		var hasPrevious = previousTileByUnit.TryGetValue( unit.Id, out var previous );
+
+		return GetLegalMoves( unit )
+			.Where( pos => !hasPrevious || pos != previous )
+			.Where( pos => pos.ManhattanDistance( enemyTarget ) < currentDistance )
+			.ToList();
 	}
 
 	void CheckCommanderVictory()
