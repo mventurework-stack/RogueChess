@@ -22,13 +22,14 @@ public enum AiDifficulty
 public sealed class RogueChessGameComponent : Component
 {
 	public const int BoardSize = 8;
+	const int ArmyChoiceCount = 7;
 	const int HandLimit = 5;
 	const int StalemateTurnLimit = 30;
 	const float HitEffectDuration = 1.0f;
 	const float DeathEffectDuration = 1.0f;
 	const float UnitSoundVolume = 0.45f;
 	const float BackgroundSoundVolume = 0.45f;
-	const string UnitHitSoundPath = "sounds/roguechess/hit_sound.sound";
+	const string UnitHitSoundPath = "sounds/roguechess/hit.sound";
 	const string UnitDeathSoundPath = "sounds/roguechess/death.sound";
 	const string UnitMoveSoundPath = "sounds/roguechess/movement.sound";
 	const string BackgroundSoundPath = "sounds/roguechess/background.sound";
@@ -51,6 +52,47 @@ public sealed class RogueChessGameComponent : Component
 		CardType.Repair
 	};
 
+	static readonly UnitType[] SelectableArmyTypes =
+	{
+		UnitType.Buddy,
+		UnitType.Shooter,
+		UnitType.Tank,
+		UnitType.Hacker
+	};
+
+	static readonly UnitType[] DefaultArmyChoices =
+	{
+		UnitType.Buddy,
+		UnitType.Shooter,
+		UnitType.Tank,
+		UnitType.Hacker,
+		UnitType.Buddy,
+		UnitType.Shooter,
+		UnitType.Tank
+	};
+
+	static readonly GridPos[] BlueArmyPositions =
+	{
+		new( 2, 7 ),
+		new( 4, 7 ),
+		new( 1, 7 ),
+		new( 5, 7 ),
+		new( 0, 7 ),
+		new( 6, 7 ),
+		new( 7, 7 )
+	};
+
+	static readonly GridPos[] RedArmyPositions =
+	{
+		new( 2, 0 ),
+		new( 4, 0 ),
+		new( 1, 0 ),
+		new( 5, 0 ),
+		new( 0, 0 ),
+		new( 6, 0 ),
+		new( 7, 0 )
+	};
+
 	[Property] public bool UseEmbeddedPanel { get; set; } = true;
 	[Property] public SoundEvent UnitHitSound { get; set; }
 	[Property] public SoundEvent UnitDeathSound { get; set; }
@@ -69,6 +111,7 @@ public sealed class RogueChessGameComponent : Component
 	public bool CardPlayed { get; private set; }
 	public int SelectedUnitId { get; private set; } = -1;
 	public int SelectedCardIndex { get; private set; } = -1;
+	public bool SpecialActionSelected { get; private set; }
 	public int UiVersion { get; private set; }
 	public string StatusMessage { get; private set; } = "";
 	public int TurnNumber { get; private set; }
@@ -76,10 +119,14 @@ public sealed class RogueChessGameComponent : Component
 	public IReadOnlyList<UnitData> Units => units;
 	public IReadOnlyList<CardType> BlueHand => blueHand;
 	public IReadOnlyList<CardType> RedHand => redHand;
+	public IReadOnlyList<UnitType> BlueArmyChoices => blueArmyChoices;
+	public IReadOnlyList<UnitType> RedArmyChoices => redArmyChoices;
 
 	readonly List<UnitData> units = new();
 	readonly List<CardType> blueHand = new();
 	readonly List<CardType> redHand = new();
+	readonly List<UnitType> blueArmyChoices = new( DefaultArmyChoices );
+	readonly List<UnitType> redArmyChoices = new( DefaultArmyChoices );
 	readonly List<BoardEffect> boardEffects = new();
 	readonly List<DyingUnitVisual> dyingUnitVisuals = new();
 
@@ -162,14 +209,24 @@ public sealed class RogueChessGameComponent : Component
 		previousTileByUnit.Clear();
 		AssignPvcDifficulties();
 
-		AddUnit( RogueChessTeam.Blue, UnitType.Commander, new GridPos( 3, 7 ) );
-		AddUnit( RogueChessTeam.Blue, UnitType.Buddy, new GridPos( 2, 7 ) );
-		AddUnit( RogueChessTeam.Blue, UnitType.Shooter, new GridPos( 4, 7 ) );
-		AddUnit( RogueChessTeam.Red, UnitType.Commander, new GridPos( 3, 0 ) );
-		AddUnit( RogueChessTeam.Red, UnitType.Buddy, new GridPos( 2, 0 ) );
-		AddUnit( RogueChessTeam.Red, UnitType.Shooter, new GridPos( 4, 0 ) );
+		AddStartingArmy( RogueChessTeam.Blue );
+		AddStartingArmy( RogueChessTeam.Red );
 
 		StartTurn( RogueChessTeam.Blue );
+	}
+
+	void AddStartingArmy( RogueChessTeam team )
+	{
+		var positions = team == RogueChessTeam.Blue ? BlueArmyPositions : RedArmyPositions;
+		var choices = GetArmyChoices( team );
+		var commanderPos = team == RogueChessTeam.Blue ? new GridPos( 3, 7 ) : new GridPos( 3, 0 );
+
+		AddUnit( team, UnitType.Commander, commanderPos );
+
+		for ( var i = 0; i < ArmyChoiceCount; i++ )
+		{
+			AddUnit( team, choices[i], positions[i] );
+		}
 	}
 
 	public void SetMode( RogueChessMode mode )
@@ -199,6 +256,28 @@ public sealed class RogueChessGameComponent : Component
 		ClearSelection();
 		StatusMessage = $"Difficulty set to {difficulty}.";
 		MarkDirty();
+	}
+
+	public void CycleArmySlot( RogueChessTeam team, int index )
+	{
+		if ( IsCurrentAiTurn() || index < 0 || index >= ArmyChoiceCount )
+			return;
+
+		var choices = GetArmyChoices( team );
+		var currentIndex = Array.IndexOf( SelectableArmyTypes, choices[index] );
+		choices[index] = SelectableArmyTypes[(currentIndex + 1) % SelectableArmyTypes.Length];
+		StatusMessage = $"{TeamName( team )} army slot {index + 1} set to {choices[index]}. Restart Match to deploy this army.";
+		MarkDirty();
+	}
+
+	public string GetArmySummary( RogueChessTeam team )
+	{
+		var counts = GetArmyChoices( team )
+			.GroupBy( type => type )
+			.OrderBy( group => group.Key.ToString() )
+			.Select( group => $"{group.Count()} {group.Key}" );
+
+		return $"Commander, {string.Join( ", ", counts )}";
 	}
 
 	public void HandleTurnButton()
@@ -265,6 +344,7 @@ public sealed class RogueChessGameComponent : Component
 		if ( unit is not null && unit.Team == CurrentTeam )
 		{
 			SelectedUnitId = unit.Id;
+			SpecialActionSelected = false;
 			StatusMessage = unit.CanActThisTurn
 				? $"{TeamName( CurrentTeam )} selected {unit.Type}."
 				: $"{TeamName( CurrentTeam )} {unit.Type} was just built and can act next turn.";
@@ -277,6 +357,16 @@ public sealed class RogueChessGameComponent : Component
 		{
 			ClearSelection();
 			StatusMessage = UnitActionSpent ? "Unit action already spent this turn." : "Select one of your units first.";
+			MarkDirty();
+			return;
+		}
+
+		if ( SpecialActionSelected )
+		{
+			if ( unit is not null && unit.Team != CurrentTeam && TryUseSpecialAbility( selected, unit ) )
+				return;
+
+			StatusMessage = "No legal special ability for that tile.";
 			MarkDirty();
 			return;
 		}
@@ -335,9 +425,31 @@ public sealed class RogueChessGameComponent : Component
 		}
 
 		SelectedCardIndex = index;
+		SpecialActionSelected = false;
 		StatusMessage = card == CardType.Push
 			? "Selected Push. First select one of your ready units, then choose an adjacent enemy to push away."
 			: $"Selected {CardData.All[card].Name}; choose a valid target.";
+		MarkDirty();
+	}
+
+	public void ToggleSpecialAction()
+	{
+		if ( IsGameOver || IsCurrentAiTurn() || UnitActionSpent )
+			return;
+
+		var selected = GetSelectedUnit();
+		if ( selected is null || selected.Team != CurrentTeam || selected.Type != UnitType.Hacker || !selected.CanActThisTurn )
+		{
+			StatusMessage = "Select a ready Hacker to use a special ability.";
+			MarkDirty();
+			return;
+		}
+
+		SelectedCardIndex = -1;
+		SpecialActionSelected = !SpecialActionSelected;
+		StatusMessage = SpecialActionSelected
+			? "Hacker special selected. Choose an adjacent enemy to disable for its next turn."
+			: "Hacker special cancelled.";
 		MarkDirty();
 	}
 
@@ -387,6 +499,10 @@ public sealed class RogueChessGameComponent : Component
 		{
 			classes.Add( "card-target" );
 		}
+		else if ( SpecialActionSelected && unit is not null && unit.Team != CurrentTeam && IsLegalSpecialAbilityTarget( GetSelectedUnit(), unit ) )
+		{
+			classes.Add( "legal-special" );
+		}
 		else
 		{
 			var selected = GetSelectedUnit();
@@ -414,6 +530,9 @@ public sealed class RogueChessGameComponent : Component
 		var selected = GetSelectedUnit();
 		if ( selected is null || UnitActionSpent )
 			return "";
+
+		if ( SpecialActionSelected && unit is not null && unit.Team != CurrentTeam && IsLegalSpecialAbilityTarget( selected, unit ) )
+			return "DISABLE";
 
 		if ( unit is null && IsLegalMove( selected, pos ) )
 			return "MOVE";
@@ -479,6 +598,8 @@ public sealed class RogueChessGameComponent : Component
 				UnitType.Commander => "piece-commander-blue",
 				UnitType.Buddy => "piece-buddy-blue",
 				UnitType.Shooter => "piece-shooter-blue",
+				UnitType.Tank => "piece-tank-blue",
+				UnitType.Hacker => "piece-hacker-blue",
 				_ => ""
 			};
 		}
@@ -488,6 +609,8 @@ public sealed class RogueChessGameComponent : Component
 			UnitType.Commander => "piece-commander-red",
 			UnitType.Buddy => "piece-buddy-red",
 			UnitType.Shooter => "piece-shooter-red",
+			UnitType.Tank => "piece-tank-red",
+			UnitType.Hacker => "piece-hacker-red",
 			_ => ""
 		};
 	}
@@ -573,7 +696,18 @@ public sealed class RogueChessGameComponent : Component
 
 		foreach ( var unit in units.Where( unit => unit.Team == team ) )
 		{
-			unit.CanActThisTurn = true;
+			if ( unit.DisabledTurns > 0 )
+			{
+				unit.CanActThisTurn = false;
+				unit.IsDisabledThisTurn = true;
+				unit.DisabledTurns--;
+			}
+			else
+			{
+				unit.CanActThisTurn = true;
+				unit.IsDisabledThisTurn = false;
+			}
+
 			unit.Shield = 0;
 			unit.FocusDamageBonus = 0;
 			unit.SprintMoveBonus = 0;
@@ -723,6 +857,22 @@ public sealed class RogueChessGameComponent : Component
 		}
 
 		MarkDirty();
+	}
+
+	bool TryUseSpecialAbility( UnitData user, UnitData target )
+	{
+		if ( !IsLegalSpecialAbilityTarget( user, target ) )
+			return false;
+
+		target.DisabledTurns = 1;
+		UnitActionSpent = true;
+		ClearSelection();
+		StatusMessage = $"{TeamName( user.Team )} Hacker disabled {TeamName( target.Team )} {target.Type}.";
+		if ( isRunningAi )
+			lastAiAction = $"{TeamName( user.Team )} computer disabled {TeamName( target.Team )} {target.Type}.";
+
+		MarkDirty();
+		return true;
 	}
 
 	void AddHitEffect( GridPos pos )
@@ -1006,6 +1156,18 @@ public sealed class RogueChessGameComponent : Component
 			&& HasLineOfSight( attacker.Position, defender.Position );
 	}
 
+	bool IsLegalSpecialAbilityTarget( UnitData user, UnitData target )
+	{
+		return user is not null
+			&& target is not null
+			&& user.Team == CurrentTeam
+			&& user.Type == UnitType.Hacker
+			&& user.CanActThisTurn
+			&& !UnitActionSpent
+			&& target.Team != user.Team
+			&& user.Position.ManhattanDistance( target.Position ) == 1;
+	}
+
 	List<GridPos> GetLegalMoves( UnitData unit )
 	{
 		var legal = new List<GridPos>();
@@ -1224,8 +1386,13 @@ public sealed class RogueChessGameComponent : Component
 	bool IsUnitUnderThreat( UnitData unit )
 	{
 		return units.Any( enemy => enemy.Team != unit.Team
-			&& enemy.Position.ManhattanDistance( unit.Position ) <= enemy.AttackRange
-			&& HasLineOfSight( enemy.Position, unit.Position ) );
+			&& IsUnitUnderThreatFrom( unit, enemy ) );
+	}
+
+	bool IsUnitUnderThreatFrom( UnitData unit, UnitData enemy )
+	{
+		return enemy.Position.ManhattanDistance( unit.Position ) <= enemy.AttackRange
+			&& HasLineOfSight( enemy.Position, unit.Position );
 	}
 
 	void TryAiUnitAction( RogueChessTeam team )
@@ -1255,6 +1422,9 @@ public sealed class RogueChessGameComponent : Component
 			}
 		}
 
+		if ( TryAiDisableCommanderThreat( team, enemyTeam ) )
+			return;
+
 		if ( AiAttacksBeforeResources )
 		{
 			if ( TryAiAttackAnyEnemy( team, enemyTeam ) ) return;
@@ -1266,6 +1436,9 @@ public sealed class RogueChessGameComponent : Component
 			if ( TryAiAttackAnyEnemy( team, enemyTeam ) ) return;
 		}
 
+		if ( TryAiDisableAnyEnemy( team, enemyTeam ) )
+			return;
+
 		var bestMove = units
 			.Where( unit => unit.Team == team )
 			.SelectMany( unit => GetAiProgressMoves( unit, enemyCommander.Position ).Select( pos => new { Unit = unit, Pos = pos, Distance = pos.ManhattanDistance( enemyCommander.Position ) } ) )
@@ -1274,6 +1447,38 @@ public sealed class RogueChessGameComponent : Component
 
 		if ( bestMove is not null )
 			MoveUnit( bestMove.Unit, bestMove.Pos );
+	}
+
+	bool TryAiDisableCommanderThreat( RogueChessTeam team, RogueChessTeam enemyTeam )
+	{
+		var commander = GetCommander( team );
+		if ( commander is null )
+			return false;
+
+		foreach ( var hacker in units.Where( unit => unit.Team == team && unit.Type == UnitType.Hacker ).ToList() )
+		{
+			var threat = units.FirstOrDefault( unit => unit.Team == enemyTeam && IsUnitUnderThreatFrom( commander, unit ) && IsLegalSpecialAbilityTarget( hacker, unit ) );
+			if ( threat is not null )
+				return TryUseSpecialAbility( hacker, threat );
+		}
+
+		return false;
+	}
+
+	bool TryAiDisableAnyEnemy( RogueChessTeam team, RogueChessTeam enemyTeam )
+	{
+		foreach ( var hacker in units.Where( unit => unit.Team == team && unit.Type == UnitType.Hacker ).ToList() )
+		{
+			var target = units
+				.Where( unit => unit.Team == enemyTeam && IsLegalSpecialAbilityTarget( hacker, unit ) )
+				.OrderByDescending( unit => unit.Type == UnitType.Commander )
+				.ThenBy( unit => unit.Health )
+				.FirstOrDefault();
+			if ( target is not null )
+				return TryUseSpecialAbility( hacker, target );
+		}
+
+		return false;
 	}
 
 	bool TryAiAttackAnyEnemy( RogueChessTeam team, RogueChessTeam enemyTeam )
@@ -1345,6 +1550,7 @@ public sealed class RogueChessGameComponent : Component
 	{
 		SelectedUnitId = -1;
 		SelectedCardIndex = -1;
+		SpecialActionSelected = false;
 	}
 
 	void SetScrap( RogueChessTeam team, int value )
@@ -1358,6 +1564,11 @@ public sealed class RogueChessGameComponent : Component
 	List<CardType> GetHand( RogueChessTeam team )
 	{
 		return team == RogueChessTeam.Blue ? blueHand : redHand;
+	}
+
+	List<UnitType> GetArmyChoices( RogueChessTeam team )
+	{
+		return team == RogueChessTeam.Blue ? blueArmyChoices : redArmyChoices;
 	}
 
 	UnitData GetUnitAt( GridPos pos )

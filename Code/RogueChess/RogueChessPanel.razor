@@ -17,7 +17,7 @@
 		@if ( ShowIntro )
 		{
 			<div class="intro-screen">
-				<div class="intro-title">Scrap Chess Buddies</div>
+				<div class="intro-title">Rogue Chess V2</div>
 				<div class="intro-page-label">Page @(IntroPage + 1) of @IntroPageCount</div>
 
 				@if ( IntroPage == 0 )
@@ -65,7 +65,7 @@
 								<div class="instruction-unit-image buddy-blue"></div>
 								<div class="instruction-unit-copy">
 									<div class="instruction-unit-name">Buddy</div>
-									<div class="instruction-unit-text">A basic short-range unit. Good for blocking, collecting Scrap, and protecting the Commander.</div>
+									<div class="instruction-unit-text">A fast scout. Good for collecting Scrap, flanking, blocking, and pressuring Shooters.</div>
 								</div>
 							</div>
 							<div class="instruction-unit-row">
@@ -73,6 +73,20 @@
 								<div class="instruction-unit-copy">
 									<div class="instruction-unit-name">Shooter</div>
 									<div class="instruction-unit-text">A fragile ranged unit. Good for attacking from a distance, but easy to lose.</div>
+								</div>
+							</div>
+							<div class="instruction-unit-row">
+								<div class="instruction-unit-image tank-blue"></div>
+								<div class="instruction-unit-copy">
+									<div class="instruction-unit-name">Tank</div>
+									<div class="instruction-unit-text">A durable frontline unit. Good for holding territory and protecting allies.</div>
+								</div>
+							</div>
+							<div class="instruction-unit-row">
+								<div class="instruction-unit-image hacker-blue"></div>
+								<div class="instruction-unit-copy">
+									<div class="instruction-unit-name">Hacker</div>
+									<div class="instruction-unit-text">A fragile control unit. It may disable an adjacent enemy instead of attacking.</div>
 								</div>
 							</div>
 						</div>
@@ -140,7 +154,7 @@
 				</div>
 			}
 			<div class="topbar">
-				<div class="brand">Scrap Chess Buddies</div>
+				<div class="brand">Rogue Chess V2</div>
 				<div class="turn @Game.CurrentTeam.ToString().ToLower()">@Game.TeamName( Game.CurrentTeam ) Turn</div>
 				<div class="mode">@ModeText</div>
 				<div class="instructions-button" onclick=@ShowHowToPlay>Instructions</div>
@@ -152,6 +166,14 @@
 						<div class="hand-title">Blue Player</div>
 						<div class="side-scrap">Scrap: @Game.BlueScrap</div>
 						<div class="hand-help">Draws 1 card at start of Blue turn.</div>
+						<div class="army-summary">@Game.GetArmySummary( RogueChessTeam.Blue )</div>
+						<div class="army-slots">
+							@for ( var slot = 0; slot < Game.BlueArmyChoices.Count; slot++ )
+							{
+								var armySlot = slot;
+								<div class="army-slot blue-slot" onclick=@( () => Game.CycleArmySlot( RogueChessTeam.Blue, armySlot ) )>@(armySlot + 1): @Game.BlueArmyChoices[armySlot]</div>
+							}
+						</div>
 					</div>
 					@for ( var i = 0; i < Game.BlueHand.Count; i++ )
 					{
@@ -219,7 +241,9 @@
 										@if ( unit is not null )
 										{
 											<div class="piece-token image-token @GetPieceImageClass( unit )">
-												<div class="piece-art"></div>
+												<div class="piece-art">
+													<div class="piece-label">@unit.ShortName</div>
+												</div>
 												<div class="piece-hp">
 													<span>@unit.Health/@unit.MaxHealth</span>
 													@if ( unit.Shield > 0 )
@@ -230,13 +254,15 @@
 											</div>
 											@if ( !unit.CanActThisTurn )
 											{
-												<div class="unit-wait">NEXT TURN</div>
+												<div class="unit-wait">@(unit.IsDisabledThisTurn ? "DISABLED" : "NEXT TURN")</div>
 											}
 										}
 										@if ( !string.IsNullOrEmpty( dyingUnitClass ) )
 										{
 											<div class="@dyingUnitClass">
-												<div class="piece-art"></div>
+												<div class="piece-art">
+													<div class="piece-label">KO</div>
+												</div>
 												<div class="@deathSplatClass"></div>
 												<div class="@deathSwirlClass"></div>
 											</div>
@@ -286,6 +312,10 @@
 							else
 							{
 								<div class="action-button" onclick=@Game.HandleTurnButton>@TurnButtonText</div>
+								@if ( CanShowHackerSpecial() )
+								{
+									<div class="@SpecialButtonClass" onclick=@Game.ToggleSpecialAction>@SpecialButtonText</div>
+								}
 								<div class="action-button" onclick=@Game.RestartMatch>Restart Match</div>
 								<div class="mode-button-row">
 									<div class="@GetModeButtonClass( RogueChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsComputer ) )>PVE</div>
@@ -309,6 +339,14 @@
 						<div class="hand-title">Red Player</div>
 						<div class="side-scrap">Scrap: @Game.RedScrap</div>
 						<div class="hand-help">Draws 1 card at start of Red turn.</div>
+						<div class="army-summary">@Game.GetArmySummary( RogueChessTeam.Red )</div>
+						<div class="army-slots">
+							@for ( var slot = 0; slot < Game.RedArmyChoices.Count; slot++ )
+							{
+								var armySlot = slot;
+								<div class="army-slot red-slot" onclick=@( () => Game.CycleArmySlot( RogueChessTeam.Red, armySlot ) )>@(armySlot + 1): @Game.RedArmyChoices[armySlot]</div>
+							}
+						</div>
 					</div>
 					@for ( var i = 0; i < Game.RedHand.Count; i++ )
 					{
@@ -371,6 +409,8 @@
 	};
 
 	string TurnButtonText => Game?.Mode == RogueChessMode.ComputerVsComputer ? "Stop Game" : "End Turn [Space]";
+	string SpecialButtonText => Game?.SpecialActionSelected == true ? "Cancel Disable" : "Disable";
+	string SpecialButtonClass => Game?.SpecialActionSelected == true ? "action-button special active" : "action-button special";
 
 	public override void Tick()
 	{
@@ -407,6 +447,17 @@
 			&& Game.Mode != RogueChessMode.ComputerVsComputer;
 	}
 
+	bool CanShowHackerSpecial()
+	{
+		var selected = Game?.GetSelectedUnit();
+		return selected is not null
+			&& selected.Type == UnitType.Hacker
+			&& selected.Team == Game.CurrentTeam
+			&& selected.CanActThisTurn
+			&& !Game.UnitActionSpent
+			&& !Game.IsCurrentAiTurn();
+	}
+
 	string GetModeButtonClass( RogueChessMode mode )
 	{
 		return Game?.Mode == mode ? "mode-button active" : "mode-button";
@@ -426,6 +477,8 @@
 				UnitType.Commander => "piece-commander-blue",
 				UnitType.Buddy => "piece-buddy-blue",
 				UnitType.Shooter => "piece-shooter-blue",
+				UnitType.Tank => "piece-tank-blue",
+				UnitType.Hacker => "piece-hacker-blue",
 				_ => ""
 			};
 		}
@@ -435,6 +488,8 @@
 			UnitType.Commander => "piece-commander-red",
 			UnitType.Buddy => "piece-buddy-red",
 			UnitType.Shooter => "piece-shooter-red",
+			UnitType.Tank => "piece-tank-red",
+			UnitType.Hacker => "piece-hacker-red",
 			_ => ""
 		};
 	}

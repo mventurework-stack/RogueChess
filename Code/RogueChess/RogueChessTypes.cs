@@ -20,7 +20,9 @@ public enum UnitType
 {
 	Commander,
 	Buddy,
-	Shooter
+	Shooter,
+	Tank,
+	Hacker
 }
 
 public enum CardType
@@ -70,6 +72,8 @@ public sealed class UnitData
 	public int Shield { get; set; }
 	public int FocusDamageBonus { get; set; }
 	public int SprintMoveBonus { get; set; }
+	public int DisabledTurns { get; set; }
+	public bool IsDisabledThisTurn { get; set; }
 	public bool CanActThisTurn { get; set; } = true;
 
 	public UnitData( int id, RogueChessTeam team, UnitType type, GridPos position )
@@ -99,6 +103,18 @@ public sealed class UnitData
 				AttackRange = 3;
 				Damage = 1;
 				break;
+			case UnitType.Tank:
+				MaxHealth = 5;
+				MoveRange = 1;
+				AttackRange = 1;
+				Damage = 1;
+				break;
+			case UnitType.Hacker:
+				MaxHealth = 2;
+				MoveRange = 2;
+				AttackRange = 1;
+				Damage = 1;
+				break;
 		}
 
 		Health = MaxHealth;
@@ -111,6 +127,8 @@ public sealed class UnitData
 		UnitType.Commander => "CMD",
 		UnitType.Buddy => "BUD",
 		UnitType.Shooter => "SHT",
+		UnitType.Tank => "TNK",
+		UnitType.Hacker => "HCK",
 		_ => "???"
 	};
 }

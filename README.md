@@ -1,14 +1,14 @@
-# Scrap Chess Buddies
+# Rogue Chess V2
 
-A small S&box C# prototype for a 2D turn-based strategy card game.
+A small S&box C# turn-based tactics game about positioning, army composition, Scrap control, and temporary card effects.
 
 ## Files
 
-- `Code/ScrapChess/ScrapChessTypes.cs` contains teams, units, cards, positions, and card metadata.
-- `Code/ScrapChess/ScrapChessGameComponent.cs` owns board state, turns, resources, card play, movement, attacks, win checks, and the simple Red AI.
-- `Code/ScrapChess/ScrapChessPanel.razor` renders the clickable board, hands, status, and control buttons.
-- `Code/ScrapChess/ScrapChessPanel.razor.scss` provides the simple colored prototype styling.
-- `.sbproj` marks the folder as a S&box addon with code under `Code`.
+- `Code/RogueChess/RogueChessTypes.cs` contains teams, units, cards, positions, and card metadata.
+- `Code/RogueChess/RogueChessGameComponent.cs` owns board state, army choices, turns, resources, card play, movement, attacks, Hacker disables, win checks, and the simple AI.
+- `Code/RogueChess/RogueChessPanel.razor` renders the clickable board, army slots, hands, status, and control buttons.
+- `Code/RogueChess/RogueChessPanel.razor.scss` provides the tactical UI styling.
+- `Version 2 docs/` contains the Rogue Chess V2 design documents.
 
 ## Add It To A Scene
 
@@ -16,33 +16,42 @@ A small S&box C# prototype for a 2D turn-based strategy card game.
 2. Open `Assets/scenes/minimal.scene`.
 3. Press play.
 
-If your scene already has a UI root, you can disable `UseEmbeddedPanel`, add `ScrapChessPanel` manually, and assign its `Game` parameter to the `ScrapChessGameComponent`.
+If your scene already has a UI root, you can disable `UseEmbeddedPanel`, add `RogueChessPanel` manually, and assign its `Game` parameter to the `RogueChessGameComponent`.
+
+## Version 2 Rules
+
+- Each player starts with exactly 8 units: 1 Commander plus 7 freely chosen units.
+- The selectable non-Commander units are Buddy, Shooter, Tank, and Hacker.
+- There are no army composition restrictions beyond the required Commander.
+- A turn allows one unit action, one optional card, then End Turn.
+- Unit actions are move, attack, or a special ability.
+- The Hacker may disable one adjacent enemy instead of attacking.
+- A disabled unit cannot act during its next turn, may still be attacked, and then recovers.
+- Destroying the enemy Commander wins the game.
+- Cards remain temporary and do not create permanent upgrades.
 
 ## Test Vs AI Mode
 
-1. Start the match in the default `Vs AI` mode.
+1. Start the match in the default `PVE` mode.
 2. Blue acts first and Red is controlled by the computer.
-3. Click a friendly unit, then click a highlighted move tile or highlighted enemy target.
-4. Click a card in the current player's hand, then click a highlighted card target.
-5. Use `End Turn`; Red will immediately run a legal simple AI turn.
-6. Kill the enemy Commander to win.
-
-## Test Hot-Seat Mode
-
-1. Click `Switch Hotseat`.
-2. Blue and Red are both controlled by local players.
-3. Take turns moving or attacking with one unit, optionally playing one card, then ending the turn.
+3. Click army slots in either side panel to cycle that side's seven non-Commander units, then click `Restart Match` to deploy the selected armies.
+4. Click a friendly unit, then click a highlighted move tile or highlighted enemy target.
+5. Select a ready Hacker and click `Disable` to highlight adjacent enemies that can be disabled.
+6. Click a card in the current player's hand, then click a highlighted card target.
+7. Use `End Turn`; Red will run a legal simple AI turn.
+8. Kill the enemy Commander to win.
 
 ## Rules Notes
 
-- A unit may move or attack on its turn, not both.
+- The board is an 8x8 symmetrical grid.
 - Scrap Tiles are the center board squares. A unit standing on one at the start of its team's turn gives +1 extra Scrap.
 - Buddy moves farther than the other units, so it is strong for reaching Scrap Tiles.
 - Shooter attacks up to 3 tiles in a straight orthogonal line. Other units block the shot.
-- Build Buddy creates a Buddy beside your Commander, but that new Buddy acts next turn.
+- Tank has high health and low mobility, making it strong for holding territory.
+- Hacker is fragile but can deny one adjacent enemy action on that enemy's next turn.
 
 ## Known Limitations
 
 - The AI is intentionally simple and deterministic.
 - Card draw uses a fixed repeating order instead of shuffle/randomness.
-- There is no networking, save/load, animation, custom art, or matchmaking.
+- There is no networking, save/load, custom Tank/Hacker bitmap art, or matchmaking.
