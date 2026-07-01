@@ -112,6 +112,8 @@ public sealed class RogueChessGameComponent : Component
 	public int SelectedUnitId { get; private set; } = -1;
 	public int SelectedCardIndex { get; private set; } = -1;
 	public bool SpecialActionSelected { get; private set; }
+	public bool MatchStarted { get; private set; }
+	public UnitType SelectedArmyBuilderUnit { get; private set; } = UnitType.Buddy;
 	public int UiVersion { get; private set; }
 	public string StatusMessage { get; private set; } = "";
 	public int TurnNumber { get; private set; }
@@ -119,14 +121,17 @@ public sealed class RogueChessGameComponent : Component
 	public IReadOnlyList<UnitData> Units => units;
 	public IReadOnlyList<CardType> BlueHand => blueHand;
 	public IReadOnlyList<CardType> RedHand => redHand;
-	public IReadOnlyList<UnitType> BlueArmyChoices => blueArmyChoices;
-	public IReadOnlyList<UnitType> RedArmyChoices => redArmyChoices;
+	public IReadOnlyList<UnitType?> BlueArmyChoices => blueArmyChoices;
+	public IReadOnlyList<UnitType?> RedArmyChoices => redArmyChoices;
+	public IReadOnlyList<UnitType> UnitPoolTypes => SelectableArmyTypes;
+	public int BlueArmyFilledSlots => 1 + blueArmyChoices.Count( type => type.HasValue );
+	public bool IsBlueArmyComplete => BlueArmyFilledSlots == ArmyChoiceCount + 1;
 
 	readonly List<UnitData> units = new();
 	readonly List<CardType> blueHand = new();
 	readonly List<CardType> redHand = new();
-	readonly List<UnitType> blueArmyChoices = new( DefaultArmyChoices );
-	readonly List<UnitType> redArmyChoices = new( DefaultArmyChoices );
+	readonly List<UnitType?> blueArmyChoices = Enumerable.Repeat<UnitType?>( null, ArmyChoiceCount ).ToList();
+	readonly List<UnitType?> redArmyChoices = DefaultArmyChoices.Select( type => (UnitType?)type ).ToList();
 	readonly List<BoardEffect> boardEffects = new();
 	readonly List<DyingUnitVisual> dyingUnitVisuals = new();
 
@@ -154,7 +159,7 @@ public sealed class RogueChessGameComponent : Component
 	protected override void OnStart()
 	{
 		StartBackgroundSound();
-		RestartMatch();
+		PrepareArmyBuilder();
 
 		if ( UseEmbeddedPanel )
 		{
@@ -175,7 +180,7 @@ public sealed class RogueChessGameComponent : Component
 		UpdateDyingUnitVisuals();
 		EnsureBackgroundSound();
 
-		if ( IsCurrentAiTurn() && Time.Now >= nextAiActionTime )
+		if ( MatchStarted && IsCurrentAiTurn() && Time.Now >= nextAiActionTime )
 			RunAiTurn();
 	}
 
@@ -191,6 +196,14 @@ public sealed class RogueChessGameComponent : Component
 
 	public void RestartMatch()
 	{
+		if ( !IsBlueArmyComplete )
+		{
+			StatusMessage = "Choose 7 units to join your Commander before starting the match.";
+			MarkDirty();
+			return;
+		}
+
+		MatchStarted = true;
 		units.Clear();
 		blueHand.Clear();
 		redHand.Clear();
@@ -215,6 +228,19 @@ public sealed class RogueChessGameComponent : Component
 		StartTurn( RogueChessTeam.Blue );
 	}
 
+	void PrepareArmyBuilder()
+	{
+		MatchStarted = false;
+		units.Clear();
+		blueHand.Clear();
+		redHand.Clear();
+		boardEffects.Clear();
+		dyingUnitVisuals.Clear();
+		ClearSelection();
+		StatusMessage = "Choose 7 units to join your Commander.";
+		MarkDirty();
+	}
+
 	void AddStartingArmy( RogueChessTeam team )
 	{
 		var positions = team == RogueChessTeam.Blue ? BlueArmyPositions : RedArmyPositions;
@@ -225,8 +251,44 @@ public sealed class RogueChessGameComponent : Component
 
 		for ( var i = 0; i < ArmyChoiceCount; i++ )
 		{
-			AddUnit( team, choices[i], positions[i] );
+			AddUnit( team, choices[i] ?? DefaultArmyChoices[i], positions[i] );
 		}
+	}
+
+	public void StartMatchFromArmyBuilder()
+	{
+		RestartMatch();
+	}
+
+	public void SelectArmyBuilderUnit( UnitType unitType )
+	{
+		if ( unitType == UnitType.Commander )
+			return;
+
+		SelectedArmyBuilderUnit = unitType;
+		StatusMessage = $"{unitType} selected for army slots.";
+		MarkDirty();
+	}
+
+	public void SetBlueArmySlot( int index )
+	{
+		if ( MatchStarted || index < 0 || index >= ArmyChoiceCount )
+			return;
+
+		blueArmyChoices[index] = SelectedArmyBuilderUnit;
+		StatusMessage = $"Army slot {index + 2} set to {SelectedArmyBuilderUnit}.";
+		MarkDirty();
+	}
+
+	public void ClearBlueArmySlot( int index )
+	{
+		if ( MatchStarted || index < 0 || index >= ArmyChoiceCount || !blueArmyChoices[index].HasValue )
+			return;
+
+		var removed = blueArmyChoices[index].Value;
+		blueArmyChoices[index] = null;
+		StatusMessage = $"Removed {removed} from army slot {index + 2}.";
+		MarkDirty();
 	}
 
 	public void SetMode( RogueChessMode mode )
@@ -260,11 +322,12 @@ public sealed class RogueChessGameComponent : Component
 
 	public void CycleArmySlot( RogueChessTeam team, int index )
 	{
-		if ( IsCurrentAiTurn() || index < 0 || index >= ArmyChoiceCount )
+		if ( MatchStarted || IsCurrentAiTurn() || index < 0 || index >= ArmyChoiceCount )
 			return;
 
 		var choices = GetArmyChoices( team );
-		var currentIndex = Array.IndexOf( SelectableArmyTypes, choices[index] );
+		var currentType = choices[index] ?? SelectableArmyTypes[^1];
+		var currentIndex = Array.IndexOf( SelectableArmyTypes, currentType );
 		choices[index] = SelectableArmyTypes[(currentIndex + 1) % SelectableArmyTypes.Length];
 		StatusMessage = $"{TeamName( team )} army slot {index + 1} set to {choices[index]}. Restart Match to deploy this army.";
 		MarkDirty();
@@ -272,12 +335,15 @@ public sealed class RogueChessGameComponent : Component
 
 	public string GetArmySummary( RogueChessTeam team )
 	{
-		var counts = GetArmyChoices( team )
+		var choices = GetArmyChoices( team );
+		var picked = choices.Where( type => type.HasValue ).Select( type => type.Value );
+		var counts = picked
 			.GroupBy( type => type )
 			.OrderBy( group => group.Key.ToString() )
 			.Select( group => $"{group.Count()} {group.Key}" );
 
-		return $"Commander, {string.Join( ", ", counts )}";
+		var summary = string.Join( ", ", counts );
+		return string.IsNullOrEmpty( summary ) ? "Commander" : $"Commander, {summary}";
 	}
 
 	public void HandleTurnButton()
@@ -304,7 +370,7 @@ public sealed class RogueChessGameComponent : Component
 
 	public void EndTurn()
 	{
-		if ( IsGameOver || IsCurrentAiTurn() )
+		if ( !MatchStarted || IsGameOver || IsCurrentAiTurn() )
 			return;
 
 		AdvanceTurn( true );
@@ -312,7 +378,7 @@ public sealed class RogueChessGameComponent : Component
 
 	public void ClickTile( int x, int y )
 	{
-		if ( IsGameOver || IsCurrentAiTurn() )
+		if ( !MatchStarted || IsGameOver || IsCurrentAiTurn() )
 			return;
 
 		var pos = new GridPos( x, y );
@@ -389,7 +455,7 @@ public sealed class RogueChessGameComponent : Component
 
 	public void SelectCard( RogueChessTeam team, int index )
 	{
-		if ( IsGameOver || IsCurrentAiTurn() )
+		if ( !MatchStarted || IsGameOver || IsCurrentAiTurn() )
 			return;
 
 		if ( team != CurrentTeam )
@@ -434,7 +500,7 @@ public sealed class RogueChessGameComponent : Component
 
 	public void ToggleSpecialAction()
 	{
-		if ( IsGameOver || IsCurrentAiTurn() || UnitActionSpent )
+		if ( !MatchStarted || IsGameOver || IsCurrentAiTurn() || UnitActionSpent )
 			return;
 
 		var selected = GetSelectedUnit();
@@ -639,6 +705,37 @@ public sealed class RogueChessGameComponent : Component
 		return team == RogueChessTeam.Blue ? "Blue" : "Red";
 	}
 
+	public string GetUnitRole( UnitType unitType )
+	{
+		return unitType switch
+		{
+			UnitType.Commander => "Leader Unit",
+			UnitType.Buddy => "Fast Scout",
+			UnitType.Shooter => "Long-Range Support",
+			UnitType.Tank => "Durable Frontline",
+			UnitType.Hacker => "Battlefield Control",
+			_ => ""
+		};
+	}
+
+	public string GetUnitDescription( UnitType unitType )
+	{
+		return unitType switch
+		{
+			UnitType.Commander => "Losing your Commander means you lose the battle.",
+			UnitType.Buddy => "Reaches Scrap quickly, flanks enemies, and screens allies.",
+			UnitType.Shooter => "Pressures lanes from range but cannot shoot through units.",
+			UnitType.Tank => "Holds territory and protects fragile allies with high health.",
+			UnitType.Hacker => "May disable one adjacent enemy instead of attacking.",
+			_ => ""
+		};
+	}
+
+	public UnitData CreatePreviewUnit( UnitType unitType )
+	{
+		return new UnitData( 0, RogueChessTeam.Blue, unitType, default );
+	}
+
 	public int GetScrap( RogueChessTeam team )
 	{
 		return team == RogueChessTeam.Blue ? BlueScrap : RedScrap;
@@ -646,7 +743,7 @@ public sealed class RogueChessGameComponent : Component
 
 	public bool IsCurrentAiTurn()
 	{
-		return IsComputerControlled( CurrentTeam ) && !IsGameOver;
+		return MatchStarted && IsComputerControlled( CurrentTeam ) && !IsGameOver;
 	}
 
 	public bool IsComputerControlled( RogueChessTeam team )
@@ -1566,7 +1663,7 @@ public sealed class RogueChessGameComponent : Component
 		return team == RogueChessTeam.Blue ? blueHand : redHand;
 	}
 
-	List<UnitType> GetArmyChoices( RogueChessTeam team )
+	List<UnitType?> GetArmyChoices( RogueChessTeam team )
 	{
 		return team == RogueChessTeam.Blue ? blueArmyChoices : redArmyChoices;
 	}

@@ -14,7 +14,127 @@
 	}
 	else
 	{
-		@if ( ShowIntro )
+		@if ( ShowArmyBuilder )
+		{
+			<div class="army-builder-screen">
+				<div class="builder-left">
+					<div class="builder-logo-mark"></div>
+					<div class="builder-logo">
+						<div>ROGUE</div>
+						<div>CHESS</div>
+					</div>
+					<div class="builder-subtitle">Build Your Army</div>
+					<div class="builder-copy">Choose 7 units to join your Commander into battle.</div>
+					@if ( !string.IsNullOrEmpty( BuilderNotice ) )
+					{
+						<div class="builder-notice">@BuilderNotice</div>
+					}
+					<div class="@StartMatchButtonClass" onclick=@TryStartMatch>Start Game</div>
+					<div class="builder-menu-button" onclick=@ShowSettingsStatus>Settings</div>
+					<div class="builder-menu-button" onclick=@ShowHowToPlay>How To Play</div>
+				</div>
+
+				<div class="builder-center">
+					<div class="builder-panel">
+						<div class="builder-header">
+							<div class="builder-title">Your Army</div>
+							<div class="builder-count">@Game.BlueArmyFilledSlots/8</div>
+						</div>
+						<div class="army-builder-slots">
+							<div class="builder-slot commander-slot filled locked" onclick=@( () => SetBuilderDetailsUnit( UnitType.Commander ) )>
+								<div class="slot-number">1</div>
+								<div class="slot-unit-name">Commander</div>
+								<div class="slot-portrait piece-commander-blue">
+									<div class="piece-art">
+										<div class="piece-label">CMD</div>
+									</div>
+								</div>
+								<div class="slot-lock">Locked</div>
+							</div>
+							@for ( var slot = 0; slot < Game.BlueArmyChoices.Count; slot++ )
+							{
+								var armySlot = slot;
+								var slotType = Game.BlueArmyChoices[armySlot];
+								if ( slotType.HasValue )
+								{
+									var unitType = slotType.Value;
+									<div class="@GetBuilderSlotClass( unitType, true )" onclick=@( () => Game.ClearBlueArmySlot( armySlot ) )>
+										<div class="slot-number">@(armySlot + 2)</div>
+										<div class="slot-unit-name">@unitType</div>
+										<div class="@GetBuilderPortraitClass( unitType )">
+											<div class="piece-art">
+												<div class="piece-label">@GetUnitShortName( unitType )</div>
+											</div>
+										</div>
+										<div class="slot-lock">Click to clear</div>
+									</div>
+								}
+								else
+								{
+									<div class="builder-slot empty" onclick=@( () => Game.SetBlueArmySlot( armySlot ) )>
+										<div class="slot-number">@(armySlot + 2)</div>
+										<div class="slot-plus">+</div>
+										<div class="slot-empty-text">Drag Unit Here</div>
+									</div>
+								}
+							}
+						</div>
+
+						<div class="unit-pool-header">
+							<div class="unit-pool-title">Unit Pool</div>
+							<div class="unit-pool-copy">Select a unit card, then click an empty army slot.</div>
+						</div>
+						<div class="unit-pool">
+							@foreach ( var unitType in Game.UnitPoolTypes )
+							{
+								var preview = Game.CreatePreviewUnit( unitType );
+								<div class="@GetBuilderUnitCardClass( unitType )" onclick=@( () => SelectBuilderUnit( unitType ) )>
+									<div class="unit-card-type">@unitType</div>
+									<div class="@GetBuilderPortraitClass( unitType )">
+										<div class="piece-art">
+											<div class="piece-label">@preview.ShortName</div>
+										</div>
+									</div>
+									<div class="unit-card-role">@Game.GetUnitRole( unitType )</div>
+									<div class="unit-card-stats">HP @preview.MaxHealth / MV @preview.MoveRange / RNG @preview.AttackRange / DMG @preview.Damage</div>
+								</div>
+							}
+						</div>
+					</div>
+				</div>
+
+				<div class="builder-right">
+					<div class="details-card">
+						@{
+							var details = Game.CreatePreviewUnit( BuilderDetailsUnit );
+						}
+						<div class="details-kicker">Selected Unit</div>
+						<div class="details-title">@BuilderDetailsUnit</div>
+						<div class="details-role">@Game.GetUnitRole( BuilderDetailsUnit )</div>
+						<div class="@GetBuilderPortraitClass( BuilderDetailsUnit )">
+							<div class="piece-art">
+								<div class="piece-label">@details.ShortName</div>
+							</div>
+						</div>
+						<div class="details-stats">
+							<div>Health <span>@details.MaxHealth</span></div>
+							<div>Movement <span>@details.MoveRange</span></div>
+							<div>Attack Range <span>@details.AttackRange</span></div>
+							<div>Damage <span>@details.Damage</span></div>
+						</div>
+						<div class="details-note">@Game.GetUnitDescription( BuilderDetailsUnit )</div>
+					</div>
+					<div class="details-card compact">
+						<div class="details-kicker">Army Rules</div>
+						<div class="builder-rule">Commander is locked.</div>
+						<div class="builder-rule">Choose exactly 7 additional units.</div>
+						<div class="builder-rule">Any combination of Buddy, Shooter, Tank, and Hacker is legal.</div>
+						<div class="builder-rule">Start Game unlocks at 8/8.</div>
+					</div>
+				</div>
+			</div>
+		}
+		else if ( ShowIntro )
 		{
 			<div class="intro-screen">
 				<div class="intro-title">Rogue Chess V2</div>
@@ -166,14 +286,6 @@
 						<div class="hand-title">Blue Player</div>
 						<div class="side-scrap">Scrap: @Game.BlueScrap</div>
 						<div class="hand-help">Draws 1 card at start of Blue turn.</div>
-						<div class="army-summary">@Game.GetArmySummary( RogueChessTeam.Blue )</div>
-						<div class="army-slots">
-							@for ( var slot = 0; slot < Game.BlueArmyChoices.Count; slot++ )
-							{
-								var armySlot = slot;
-								<div class="army-slot blue-slot" onclick=@( () => Game.CycleArmySlot( RogueChessTeam.Blue, armySlot ) )>@(armySlot + 1): @Game.BlueArmyChoices[armySlot]</div>
-							}
-						</div>
 					</div>
 					@for ( var i = 0; i < Game.BlueHand.Count; i++ )
 					{
@@ -339,14 +451,6 @@
 						<div class="hand-title">Red Player</div>
 						<div class="side-scrap">Scrap: @Game.RedScrap</div>
 						<div class="hand-help">Draws 1 card at start of Red turn.</div>
-						<div class="army-summary">@Game.GetArmySummary( RogueChessTeam.Red )</div>
-						<div class="army-slots">
-							@for ( var slot = 0; slot < Game.RedArmyChoices.Count; slot++ )
-							{
-								var armySlot = slot;
-								<div class="army-slot red-slot" onclick=@( () => Game.CycleArmySlot( RogueChessTeam.Red, armySlot ) )>@(armySlot + 1): @Game.RedArmyChoices[armySlot]</div>
-							}
-						</div>
 					</div>
 					@for ( var i = 0; i < Game.RedHand.Count; i++ )
 					{
@@ -396,10 +500,14 @@
 @code
 {
 	[Parameter] public RogueChessGameComponent Game { get; set; }
-	bool ShowIntro { get; set; } = true;
+	bool ShowArmyBuilder { get; set; } = true;
+	bool ShowIntro { get; set; }
+	UnitType BuilderDetailsUnit { get; set; } = UnitType.Commander;
+	string BuilderNotice { get; set; } = "";
 	int IntroPage { get; set; }
 	const int IntroPageCount = 7;
 	string IntroBackClass => IntroPage == 0 ? "nav-button disabled" : "nav-button";
+	string StartMatchButtonClass => Game?.IsBlueArmyComplete == true ? "builder-primary-button" : "builder-primary-button disabled";
 	string ModeText => Game?.Mode switch
 	{
 		RogueChessMode.PlayerVsComputer => "Player vs Computer: Blue human, Red CPU",
@@ -411,6 +519,70 @@
 	string TurnButtonText => Game?.Mode == RogueChessMode.ComputerVsComputer ? "Stop Game" : "End Turn [Space]";
 	string SpecialButtonText => Game?.SpecialActionSelected == true ? "Cancel Disable" : "Disable";
 	string SpecialButtonClass => Game?.SpecialActionSelected == true ? "action-button special active" : "action-button special";
+
+	void TryStartMatch()
+	{
+		if ( Game is null || !Game.IsBlueArmyComplete )
+		{
+			BuilderNotice = "Fill all 7 open army slots before starting.";
+			StateHasChanged();
+			return;
+		}
+
+		Game.StartMatchFromArmyBuilder();
+		if ( Game.MatchStarted )
+		{
+			ShowArmyBuilder = false;
+			ShowIntro = false;
+			BuilderNotice = "";
+		}
+
+		StateHasChanged();
+	}
+
+	void SelectBuilderUnit( UnitType unitType )
+	{
+		BuilderDetailsUnit = unitType;
+		Game?.SelectArmyBuilderUnit( unitType );
+		StateHasChanged();
+	}
+
+	void SetBuilderDetailsUnit( UnitType unitType )
+	{
+		BuilderDetailsUnit = unitType;
+		StateHasChanged();
+	}
+
+	void ShowSettingsStatus()
+	{
+		BuilderNotice = "Settings are not implemented yet.";
+		StateHasChanged();
+	}
+
+	string GetBuilderSlotClass( UnitType unitType, bool filled )
+	{
+		var classes = new List<string> { "builder-slot", filled ? "filled" : "empty", unitType.ToString().ToLower() };
+		return string.Join( " ", classes );
+	}
+
+	string GetBuilderUnitCardClass( UnitType unitType )
+	{
+		var classes = new List<string> { "unit-pool-card", unitType.ToString().ToLower() };
+		if ( Game?.SelectedArmyBuilderUnit == unitType )
+			classes.Add( "selected" );
+
+		return string.Join( " ", classes );
+	}
+
+	string GetBuilderPortraitClass( UnitType unitType )
+	{
+		return $"builder-portrait {unitType.ToString().ToLower()} {GetPieceImageClass( new UnitData( 0, RogueChessTeam.Blue, unitType, default ) )}";
+	}
+
+	string GetUnitShortName( UnitType unitType )
+	{
+		return Game?.CreatePreviewUnit( unitType ).ShortName ?? "";
+	}
 
 	public override void Tick()
 	{
@@ -441,7 +613,9 @@
 	bool CanEndTurnByKey()
 	{
 		return Game is not null
+			&& !ShowArmyBuilder
 			&& !ShowIntro
+			&& Game.MatchStarted
 			&& !Game.IsGameOver
 			&& !Game.IsCurrentAiTurn()
 			&& Game.Mode != RogueChessMode.ComputerVsComputer;
@@ -525,11 +699,17 @@
 	void StartGame()
 	{
 		ShowIntro = false;
+		if ( Game?.MatchStarted == true )
+			ShowArmyBuilder = false;
+		else
+			ShowArmyBuilder = true;
+
 		StateHasChanged();
 	}
 
 	void ShowHowToPlay()
 	{
+		ShowArmyBuilder = false;
 		ShowIntro = true;
 		IntroPage = 0;
 		StateHasChanged();
@@ -553,6 +733,6 @@
 
 	protected override int BuildHash()
 	{
-		return HashCode.Combine( Game?.UiVersion ?? 0, ShowIntro, IntroPage );
+		return HashCode.Combine( Game?.UiVersion ?? 0, ShowArmyBuilder, ShowIntro, IntroPage, BuilderDetailsUnit, BuilderNotice );
 	}
 }

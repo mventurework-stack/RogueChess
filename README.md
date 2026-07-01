@@ -6,7 +6,7 @@ A small S&box C# turn-based tactics game about positioning, army composition, Sc
 
 - `Code/RogueChess/RogueChessTypes.cs` contains teams, units, cards, positions, and card metadata.
 - `Code/RogueChess/RogueChessGameComponent.cs` owns board state, army choices, turns, resources, card play, movement, attacks, Hacker disables, win checks, and the simple AI.
-- `Code/RogueChess/RogueChessPanel.razor` renders the clickable board, army slots, hands, status, and control buttons.
+- `Code/RogueChess/RogueChessPanel.razor` renders the Army Builder, clickable board, hands, status, and control buttons.
 - `Code/RogueChess/RogueChessPanel.razor.scss` provides the tactical UI styling.
 - `Version 2 docs/` contains the Rogue Chess V2 design documents.
 
@@ -32,14 +32,16 @@ If your scene already has a UI root, you can disable `UseEmbeddedPanel`, add `Ro
 
 ## Test Vs AI Mode
 
-1. Start the match in the default `PVE` mode.
-2. Blue acts first and Red is controlled by the computer.
-3. Click army slots in either side panel to cycle that side's seven non-Commander units, then click `Restart Match` to deploy the selected armies.
-4. Click a friendly unit, then click a highlighted move tile or highlighted enemy target.
-5. Select a ready Hacker and click `Disable` to highlight adjacent enemies that can be disabled.
-6. Click a card in the current player's hand, then click a highlighted card target.
-7. Use `End Turn`; Red will run a legal simple AI turn.
-8. Kill the enemy Commander to win.
+1. The first screen is the `Rogue Chess V2` Army Builder.
+2. Select a unit card from the Unit Pool, then click an empty army slot.
+3. Fill all 7 open slots beside the locked Commander.
+4. Click `Start Game` to enter the match in the default `PVE` mode.
+5. Blue acts first and Red is controlled by the computer using a default legal V2 army.
+6. Click a friendly unit, then click a highlighted move tile or highlighted enemy target.
+7. Select a ready Hacker and click `Disable` to highlight adjacent enemies that can be disabled.
+8. Click a card in the current player's hand, then click a highlighted card target.
+9. Use `End Turn`; Red will run a legal simple AI turn.
+10. Kill the enemy Commander to win.
 
 ## Rules Notes
 
