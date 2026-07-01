@@ -92,14 +92,21 @@ public sealed class RogueChessGameComponent : Component
 	float nextBackgroundSoundRetryTime;
 	int turnsSinceLastAttack;
 	readonly Dictionary<int, GridPos> previousTileByUnit = new();
+	SoundEvent backgroundSoundEvent;
 	SoundHandle backgroundSoundHandle;
 	ScreenPanel screenPanel;
 	RogueChessPanel uiPanel;
 
+	protected override void OnAwake()
+	{
+		// Preload the background track so the first Play has no asset-load stall.
+		backgroundSoundEvent = BackgroundSound ?? TryLoadSoundEvent( BackgroundSoundPath );
+	}
+
 	protected override void OnStart()
 	{
-		RestartMatch();
 		StartBackgroundSound();
+		RestartMatch();
 
 		if ( UseEmbeddedPanel )
 		{
@@ -772,13 +779,13 @@ public sealed class RogueChessGameComponent : Component
 			return;
 
 		nextBackgroundSoundRetryTime = Time.Now + 2f;
-		var soundEvent = BackgroundSound ?? TryLoadSoundEvent( BackgroundSoundPath );
-		if ( soundEvent is null )
+		backgroundSoundEvent ??= BackgroundSound ?? TryLoadSoundEvent( BackgroundSoundPath );
+		if ( backgroundSoundEvent is null )
 			return;
 
 		try
 		{
-			backgroundSoundHandle = Sound.Play( soundEvent );
+			backgroundSoundHandle = Sound.Play( backgroundSoundEvent );
 			backgroundSoundHandle.Volume = BackgroundSoundVolume;
 			backgroundSoundHandle.SpacialBlend = 0f;
 		}
