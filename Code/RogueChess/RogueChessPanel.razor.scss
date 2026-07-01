@@ -68,7 +68,7 @@
 		align-items: center;
 		padding: 42px 28px;
 		gap: 16px;
-		background-color: rgba( 6, 14, 22, 0.78 );
+		background-color: rgba( 6, 14, 22, 0.68 );
 	}
 
 	.builder-logo-mark {
@@ -147,6 +147,10 @@
 		box-shadow: inset 0 0 12px rgba( 255, 255, 255, 0.03 );
 	}
 
+	.builder-bottom-button {
+		margin-top: auto;
+	}
+
 	.builder-center {
 		flex-grow: 1;
 		min-width: 0;
@@ -159,7 +163,7 @@
 		flex-direction: column;
 		padding: 18px;
 		gap: 16px;
-		background-color: rgba( 7, 18, 28, 0.82 );
+		background-color: rgba( 7, 18, 28, 0.72 );
 	}
 
 	.builder-header,
@@ -189,11 +193,14 @@
 		width: 100%;
 		height: 280px;
 		gap: 10px;
+		flex-direction: row;
+		align-items: stretch;
 	}
 
 	.builder-slot {
-		flex-grow: 1;
-		min-width: 0;
+		width: 12.5%;
+		flex-grow: 0;
+		flex-shrink: 1;
 		position: relative;
 		flex-direction: column;
 		align-items: center;
@@ -208,7 +215,7 @@
 	}
 
 	.builder-slot.filled {
-		border-style: solid;
+		border: 2px solid rgba( 170, 157, 142, 0.72 );
 	}
 
 	.builder-slot.locked {
@@ -1441,17 +1448,11 @@
 	}
 
 	.piece-tank-blue .piece-art {
-		border-radius: 10px;
-		background-color: rgba( 31, 92, 166, 0.88 );
-		border: 4px solid rgba( 159, 213, 255, 0.92 );
-		box-shadow: inset 0 -18px 0 rgba( 0, 34, 86, 0.38 );
+		background-image: url( "ui/pieces/roguechess_tank_blue.png" );
 	}
 
 	.piece-hacker-blue .piece-art {
-		border-radius: 48px 12px 48px 12px;
-		background-color: rgba( 23, 167, 151, 0.88 );
-		border: 4px solid rgba( 166, 255, 239, 0.92 );
-		box-shadow: inset 0 0 0 8px rgba( 0, 66, 66, 0.22 );
+		background-image: url( "ui/pieces/roguechess_hacker_blue.png" );
 	}
 
 	.piece-buddy-red .piece-art {
@@ -1467,17 +1468,11 @@
 	}
 
 	.piece-tank-red .piece-art {
-		border-radius: 10px;
-		background-color: rgba( 172, 47, 48, 0.9 );
-		border: 4px solid rgba( 255, 190, 180, 0.94 );
-		box-shadow: inset 0 -18px 0 rgba( 92, 0, 0, 0.38 );
+		background-image: url( "ui/pieces/roguechess_tank_red.png" );
 	}
 
 	.piece-hacker-red .piece-art {
-		border-radius: 48px 12px 48px 12px;
-		background-color: rgba( 194, 69, 103, 0.9 );
-		border: 4px solid rgba( 255, 199, 214, 0.94 );
-		box-shadow: inset 0 0 0 8px rgba( 88, 0, 38, 0.24 );
+		background-image: url( "ui/pieces/roguechess_hacker_red.png" );
 	}
 
 	.unit-wait {
@@ -1830,14 +1825,16 @@
 	}
 
 	.difficulty-panel {
-		width: 100%;
+		width: 220px;
 		flex-direction: column;
+		align-items: stretch;
 		gap: 8px;
+		margin-top: 4px;
 		padding: 12px;
 		border-radius: 8px;
-		background-color: #18222d;
-		border: 2px solid #33485c;
-		box-shadow: inset 0 0 0 1px rgba( 255, 255, 255, 0.04 );
+		border: 2px solid rgba( 88, 112, 131, 0.8 );
+		background-color: rgba( 7, 17, 27, 0.9 );
+		box-shadow: inset 0 0 0 1px rgba( 104, 219, 255, 0.08 );
 	}
 
 	.difficulty-title {
@@ -1857,28 +1854,29 @@
 
 	.difficulty-button {
 		width: 100%;
-		height: 34px;
+		height: 36px;
 		align-items: center;
 		justify-content: center;
 		border-radius: 6px;
-		background-color: #f4f7fb;
-		color: #10161d;
+		border: 2px solid rgba( 120, 145, 162, 0.65 );
+		background-color: rgba( 13, 28, 40, 0.86 );
+		color: #c5d8e9;
 		font-size: 13px;
 		font-weight: 900;
 		cursor: pointer;
-		border: 1px solid #ffffff;
-		box-shadow: 0 3px 0 #7d8790;
+		box-shadow: inset 0 0 12px rgba( 255, 255, 255, 0.03 );
 	}
 
 	.difficulty-button:hover {
-		background-color: #fff1a8;
-		box-shadow: 0 3px 0 #8a6208;
+		border-color: rgba( 24, 216, 255, 0.9 );
+		color: #ffffff;
 	}
 
 	.difficulty-button.active {
 		background-color: #ffd35a;
 		border: 2px solid #ffffff;
-		box-shadow: 0 3px 0 #8a6208, 0 0 12px rgba( 255, 211, 90, 0.52 );
+		color: #10161d;
+		box-shadow: 0 0 12px rgba( 255, 211, 90, 0.52 );
 	}
 
 	.missing {

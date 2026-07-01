@@ -31,7 +31,15 @@
 					}
 					<div class="@StartMatchButtonClass" onclick=@TryStartMatch>Start Game</div>
 					<div class="builder-menu-button" onclick=@ShowSettingsStatus>Settings</div>
-					<div class="builder-menu-button" onclick=@ShowHowToPlay>How To Play</div>
+					<div class="difficulty-panel">
+						<div class="difficulty-title">Difficulty</div>
+						<div class="difficulty-buttons">
+							<div class="@GetDifficultyButtonClass( AiDifficulty.Beginner )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Beginner ) )>Beginner</div>
+							<div class="@GetDifficultyButtonClass( AiDifficulty.Intermediate )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Intermediate ) )>Intermediate</div>
+							<div class="@GetDifficultyButtonClass( AiDifficulty.Hard )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Hard ) )>Hard</div>
+						</div>
+					</div>
+					<div class="builder-menu-button builder-bottom-button" onclick=@ShowHowToPlay>How To Play</div>
 				</div>
 
 				<div class="builder-center">
@@ -41,40 +49,31 @@
 							<div class="builder-count">@Game.BlueArmyFilledSlots/8</div>
 						</div>
 						<div class="army-builder-slots">
-							<div class="builder-slot commander-slot filled locked" onclick=@( () => SetBuilderDetailsUnit( UnitType.Commander ) )>
-								<div class="slot-number">1</div>
-								<div class="slot-unit-name">Commander</div>
-								<div class="slot-portrait piece-commander-blue">
-									<div class="piece-art">
-										<div class="piece-label">CMD</div>
-									</div>
-								</div>
-								<div class="slot-lock">Locked</div>
-							</div>
 							@for ( var slot = 0; slot < Game.BlueArmyChoices.Count; slot++ )
 							{
 								var armySlot = slot;
 								var slotType = Game.BlueArmyChoices[armySlot];
+								var isCommanderSlot = armySlot == RogueChessGameComponent.CommanderArmySlotIndex;
 								if ( slotType.HasValue )
 								{
 									var unitType = slotType.Value;
-									<div class="@GetBuilderSlotClass( unitType, true )" onclick=@( () => Game.ClearBlueArmySlot( armySlot ) )>
-										<div class="slot-number">@(armySlot + 2)</div>
+									<div class="@GetBuilderSlotClass( unitType, true, isCommanderSlot )" onclick=@( () => ClickArmyBuilderSlot( armySlot ) )>
+										<div class="slot-number">@(armySlot + 1)</div>
 										<div class="slot-unit-name">@unitType</div>
 										<div class="@GetBuilderPortraitClass( unitType )">
 											<div class="piece-art">
 												<div class="piece-label">@GetUnitShortName( unitType )</div>
 											</div>
 										</div>
-										<div class="slot-lock">Click to clear</div>
+										<div class="slot-lock">@GetBuilderSlotActionText( armySlot, unitType )</div>
 									</div>
 								}
 								else
 								{
 									<div class="builder-slot empty" onclick=@( () => Game.SetBlueArmySlot( armySlot ) )>
-										<div class="slot-number">@(armySlot + 2)</div>
+										<div class="slot-number">@(armySlot + 1)</div>
 										<div class="slot-plus">+</div>
-										<div class="slot-empty-text">Drag Unit Here</div>
+										<div class="slot-empty-text">Empty Slot</div>
 									</div>
 								}
 							}
@@ -82,7 +81,7 @@
 
 						<div class="unit-pool-header">
 							<div class="unit-pool-title">Unit Pool</div>
-							<div class="unit-pool-copy">Select a unit card, then click an empty army slot.</div>
+							<div class="unit-pool-copy">Select a unit card, then click an army slot.</div>
 						</div>
 						<div class="unit-pool">
 							@foreach ( var unitType in Game.UnitPoolTypes )
@@ -354,7 +353,6 @@
 										{
 											<div class="piece-token image-token @GetPieceImageClass( unit )">
 												<div class="piece-art">
-													<div class="piece-label">@unit.ShortName</div>
 												</div>
 												<div class="piece-hp">
 													<span>@unit.Health/@unit.MaxHealth</span>
@@ -405,17 +403,6 @@
 								<span>@Game.StatusMessage</span>
 							}
 						</div>
-						@if ( Game.Winner is null && Game.Mode != RogueChessMode.ComputerVsComputer )
-						{
-							<div class="difficulty-panel">
-								<div class="difficulty-title">CPU Difficulty</div>
-								<div class="difficulty-buttons">
-									<div class="@GetDifficultyButtonClass( AiDifficulty.Beginner )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Beginner ) )>Beginner</div>
-									<div class="@GetDifficultyButtonClass( AiDifficulty.Intermediate )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Intermediate ) )>Intermediate</div>
-									<div class="@GetDifficultyButtonClass( AiDifficulty.Hard )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Hard ) )>Hard</div>
-								</div>
-							</div>
-						}
 						<div class="actions">
 							@if ( Game.Winner is not null )
 							{
@@ -553,16 +540,47 @@
 		StateHasChanged();
 	}
 
+	void ClickArmyBuilderSlot( int armySlot )
+	{
+		if ( Game is null )
+			return;
+
+		var slotType = Game.BlueArmyChoices[armySlot];
+		if ( armySlot == RogueChessGameComponent.CommanderArmySlotIndex )
+		{
+			SetBuilderDetailsUnit( UnitType.Commander );
+			return;
+		}
+
+		if ( slotType.HasValue && slotType.Value == Game.SelectedArmyBuilderUnit )
+			Game.ClearBlueArmySlot( armySlot );
+		else
+			Game.SetBlueArmySlot( armySlot );
+
+		StateHasChanged();
+	}
+
 	void ShowSettingsStatus()
 	{
 		BuilderNotice = "Settings are not implemented yet.";
 		StateHasChanged();
 	}
 
-	string GetBuilderSlotClass( UnitType unitType, bool filled )
+	string GetBuilderSlotClass( UnitType unitType, bool filled, bool locked = false )
 	{
 		var classes = new List<string> { "builder-slot", filled ? "filled" : "empty", unitType.ToString().ToLower() };
+		if ( locked )
+			classes.Add( "locked" );
+
 		return string.Join( " ", classes );
+	}
+
+	string GetBuilderSlotActionText( int armySlot, UnitType unitType )
+	{
+		if ( armySlot == RogueChessGameComponent.CommanderArmySlotIndex )
+			return "Locked";
+
+		return Game?.SelectedArmyBuilderUnit == unitType ? "Click to clear" : "Click to replace";
 	}
 
 	string GetBuilderUnitCardClass( UnitType unitType )

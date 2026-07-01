@@ -22,7 +22,9 @@ public enum AiDifficulty
 public sealed class RogueChessGameComponent : Component
 {
 	public const int BoardSize = 8;
-	const int ArmyChoiceCount = 7;
+	public const int ArmySlotCount = 8;
+	public const int CommanderArmySlotIndex = 3;
+	const int SelectableArmySlotCount = ArmySlotCount - 1;
 	const int HandLimit = 5;
 	const int StalemateTurnLimit = 30;
 	const float HitEffectDuration = 1.0f;
@@ -65,6 +67,7 @@ public sealed class RogueChessGameComponent : Component
 		UnitType.Buddy,
 		UnitType.Shooter,
 		UnitType.Tank,
+		UnitType.Commander,
 		UnitType.Hacker,
 		UnitType.Buddy,
 		UnitType.Shooter,
@@ -73,25 +76,34 @@ public sealed class RogueChessGameComponent : Component
 
 	static readonly GridPos[] BlueArmyPositions =
 	{
-		new( 2, 7 ),
-		new( 4, 7 ),
-		new( 1, 7 ),
-		new( 5, 7 ),
 		new( 0, 7 ),
+		new( 1, 7 ),
+		new( 2, 7 ),
+		new( 3, 7 ),
+		new( 4, 7 ),
+		new( 5, 7 ),
 		new( 6, 7 ),
 		new( 7, 7 )
 	};
 
 	static readonly GridPos[] RedArmyPositions =
 	{
-		new( 2, 0 ),
-		new( 4, 0 ),
-		new( 1, 0 ),
-		new( 5, 0 ),
 		new( 0, 0 ),
+		new( 1, 0 ),
+		new( 2, 0 ),
+		new( 3, 0 ),
+		new( 4, 0 ),
+		new( 5, 0 ),
 		new( 6, 0 ),
 		new( 7, 0 )
 	};
+
+	static List<UnitType?> CreateEmptyArmyChoices()
+	{
+		var choices = Enumerable.Repeat<UnitType?>( null, ArmySlotCount ).ToList();
+		choices[CommanderArmySlotIndex] = UnitType.Commander;
+		return choices;
+	}
 
 	[Property] public bool UseEmbeddedPanel { get; set; } = true;
 	[Property] public SoundEvent UnitHitSound { get; set; }
@@ -124,13 +136,13 @@ public sealed class RogueChessGameComponent : Component
 	public IReadOnlyList<UnitType?> BlueArmyChoices => blueArmyChoices;
 	public IReadOnlyList<UnitType?> RedArmyChoices => redArmyChoices;
 	public IReadOnlyList<UnitType> UnitPoolTypes => SelectableArmyTypes;
-	public int BlueArmyFilledSlots => 1 + blueArmyChoices.Count( type => type.HasValue );
-	public bool IsBlueArmyComplete => BlueArmyFilledSlots == ArmyChoiceCount + 1;
+	public int BlueArmyFilledSlots => blueArmyChoices.Count( type => type.HasValue );
+	public bool IsBlueArmyComplete => BlueArmyFilledSlots == ArmySlotCount;
 
 	readonly List<UnitData> units = new();
 	readonly List<CardType> blueHand = new();
 	readonly List<CardType> redHand = new();
-	readonly List<UnitType?> blueArmyChoices = Enumerable.Repeat<UnitType?>( null, ArmyChoiceCount ).ToList();
+	readonly List<UnitType?> blueArmyChoices = CreateEmptyArmyChoices();
 	readonly List<UnitType?> redArmyChoices = DefaultArmyChoices.Select( type => (UnitType?)type ).ToList();
 	readonly List<BoardEffect> boardEffects = new();
 	readonly List<DyingUnitVisual> dyingUnitVisuals = new();
@@ -198,7 +210,7 @@ public sealed class RogueChessGameComponent : Component
 	{
 		if ( !IsBlueArmyComplete )
 		{
-			StatusMessage = "Choose 7 units to join your Commander before starting the match.";
+			StatusMessage = $"Choose {SelectableArmySlotCount} units to join your Commander before starting the match.";
 			MarkDirty();
 			return;
 		}
@@ -237,7 +249,7 @@ public sealed class RogueChessGameComponent : Component
 		boardEffects.Clear();
 		dyingUnitVisuals.Clear();
 		ClearSelection();
-		StatusMessage = "Choose 7 units to join your Commander.";
+		StatusMessage = $"Choose {SelectableArmySlotCount} units to join your Commander.";
 		MarkDirty();
 	}
 
@@ -245,11 +257,8 @@ public sealed class RogueChessGameComponent : Component
 	{
 		var positions = team == RogueChessTeam.Blue ? BlueArmyPositions : RedArmyPositions;
 		var choices = GetArmyChoices( team );
-		var commanderPos = team == RogueChessTeam.Blue ? new GridPos( 3, 7 ) : new GridPos( 3, 0 );
 
-		AddUnit( team, UnitType.Commander, commanderPos );
-
-		for ( var i = 0; i < ArmyChoiceCount; i++ )
+		for ( var i = 0; i < ArmySlotCount; i++ )
 		{
 			AddUnit( team, choices[i] ?? DefaultArmyChoices[i], positions[i] );
 		}
@@ -272,22 +281,31 @@ public sealed class RogueChessGameComponent : Component
 
 	public void SetBlueArmySlot( int index )
 	{
-		if ( MatchStarted || index < 0 || index >= ArmyChoiceCount )
+		if ( MatchStarted || index < 0 || index >= ArmySlotCount || index == CommanderArmySlotIndex )
 			return;
 
+		if ( blueArmyChoices[index] == SelectedArmyBuilderUnit )
+		{
+			ClearBlueArmySlot( index );
+			return;
+		}
+
+		var previous = blueArmyChoices[index];
 		blueArmyChoices[index] = SelectedArmyBuilderUnit;
-		StatusMessage = $"Army slot {index + 2} set to {SelectedArmyBuilderUnit}.";
+		StatusMessage = previous.HasValue
+			? $"Army slot {index + 1} replaced with {SelectedArmyBuilderUnit}."
+			: $"Army slot {index + 1} set to {SelectedArmyBuilderUnit}.";
 		MarkDirty();
 	}
 
 	public void ClearBlueArmySlot( int index )
 	{
-		if ( MatchStarted || index < 0 || index >= ArmyChoiceCount || !blueArmyChoices[index].HasValue )
+		if ( MatchStarted || index < 0 || index >= ArmySlotCount || index == CommanderArmySlotIndex || !blueArmyChoices[index].HasValue )
 			return;
 
 		var removed = blueArmyChoices[index].Value;
 		blueArmyChoices[index] = null;
-		StatusMessage = $"Removed {removed} from army slot {index + 2}.";
+		StatusMessage = $"Removed {removed} from army slot {index + 1}.";
 		MarkDirty();
 	}
 
@@ -322,7 +340,7 @@ public sealed class RogueChessGameComponent : Component
 
 	public void CycleArmySlot( RogueChessTeam team, int index )
 	{
-		if ( MatchStarted || IsCurrentAiTurn() || index < 0 || index >= ArmyChoiceCount )
+		if ( MatchStarted || IsCurrentAiTurn() || index < 0 || index >= ArmySlotCount || index == CommanderArmySlotIndex )
 			return;
 
 		var choices = GetArmyChoices( team );
@@ -336,14 +354,7 @@ public sealed class RogueChessGameComponent : Component
 	public string GetArmySummary( RogueChessTeam team )
 	{
 		var choices = GetArmyChoices( team );
-		var picked = choices.Where( type => type.HasValue ).Select( type => type.Value );
-		var counts = picked
-			.GroupBy( type => type )
-			.OrderBy( group => group.Key.ToString() )
-			.Select( group => $"{group.Count()} {group.Key}" );
-
-		var summary = string.Join( ", ", counts );
-		return string.IsNullOrEmpty( summary ) ? "Commander" : $"Commander, {summary}";
+		return string.Join( ", ", choices.Select( type => type?.ToString() ?? "Empty" ) );
 	}
 
 	public void HandleTurnButton()
