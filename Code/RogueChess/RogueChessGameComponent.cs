@@ -91,7 +91,7 @@ public sealed class RogueChessGameComponent : Component
 	protected override void OnStart()
 	{
 		RestartMatch();
-		EnsureBackgroundSound();
+		StartBackgroundSound();
 
 		if ( UseEmbeddedPanel )
 		{
@@ -724,6 +724,15 @@ public sealed class RogueChessGameComponent : Component
 		{
 			return false;
 		}
+	}
+
+	void StartBackgroundSound()
+	{
+		// Play immediately on game start, bypassing the retry throttle
+		// (the throttle field can survive editor hot-reloads).
+		nextBackgroundSoundRetryTime = 0f;
+		backgroundSoundHandle = null;
+		EnsureBackgroundSound();
 	}
 
 	void EnsureBackgroundSound()
