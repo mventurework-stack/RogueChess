@@ -18,7 +18,7 @@ public enum AiDifficulty
 /// Scene setup: create an empty GameObject, attach this component, and leave
 /// UseEmbeddedPanel enabled to spawn the UI through a ScreenPanel automatically.
 /// </summary>
-[Title( "Scrap Chess Game" ), Category( "Prototype" ), Icon( "grid_on" )]
+[Title( "Rogue Chess Game" ), Category( "Prototype" ), Icon( "grid_on" )]
 public sealed class RogueChessGameComponent : Component
 {
 	public const int BoardSize = 8;
