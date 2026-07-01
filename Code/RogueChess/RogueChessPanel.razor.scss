@@ -1331,6 +1331,58 @@
 		box-shadow: 0 3px 0 #8a6208, 0 0 12px rgba( 255, 211, 90, 0.52 );
 	}
 
+	.difficulty-panel {
+		width: 100%;
+		flex-direction: column;
+		gap: 8px;
+		padding: 12px;
+		border-radius: 8px;
+		background-color: #18222d;
+		border: 2px solid #33485c;
+		box-shadow: inset 0 0 0 1px rgba( 255, 255, 255, 0.04 );
+	}
+
+	.difficulty-title {
+		justify-content: center;
+		font-size: 12px;
+		font-weight: 900;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		color: #9fb3c6;
+	}
+
+	.difficulty-buttons {
+		width: 100%;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.difficulty-button {
+		width: 100%;
+		height: 34px;
+		align-items: center;
+		justify-content: center;
+		border-radius: 6px;
+		background-color: #f4f7fb;
+		color: #10161d;
+		font-size: 13px;
+		font-weight: 900;
+		cursor: pointer;
+		border: 1px solid #ffffff;
+		box-shadow: 0 3px 0 #7d8790;
+	}
+
+	.difficulty-button:hover {
+		background-color: #fff1a8;
+		box-shadow: 0 3px 0 #8a6208;
+	}
+
+	.difficulty-button.active {
+		background-color: #ffd35a;
+		border: 2px solid #ffffff;
+		box-shadow: 0 3px 0 #8a6208, 0 0 12px rgba( 255, 211, 90, 0.52 );
+	}
+
 	.missing {
 		margin: auto;
 		font-size: 18px;

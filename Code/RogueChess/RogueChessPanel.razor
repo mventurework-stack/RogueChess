@@ -267,6 +267,17 @@
 								<span>@Game.StatusMessage</span>
 							}
 						</div>
+						@if ( Game.Winner is null )
+						{
+							<div class="difficulty-panel">
+								<div class="difficulty-title">CPU Difficulty</div>
+								<div class="difficulty-buttons">
+									<div class="@GetDifficultyButtonClass( AiDifficulty.Beginner )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Beginner ) )>Beginner</div>
+									<div class="@GetDifficultyButtonClass( AiDifficulty.Intermediate )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Intermediate ) )>Intermediate</div>
+									<div class="@GetDifficultyButtonClass( AiDifficulty.Hard )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Hard ) )>Hard</div>
+								</div>
+							</div>
+						}
 						<div class="actions">
 							@if ( Game.Winner is not null )
 							{
@@ -279,11 +290,6 @@
 								<div class="mode-button-row">
 									<div class="@GetModeButtonClass( RogueChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsComputer ) )>PVE</div>
 									<div class="@GetModeButtonClass( RogueChessMode.ComputerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.ComputerVsComputer ) )>PVC</div>
-								</div>
-								<div class="mode-button-row">
-									<div class="@GetDifficultyButtonClass( AiDifficulty.Beginner )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Beginner ) )>Beginner</div>
-									<div class="@GetDifficultyButtonClass( AiDifficulty.Intermediate )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Intermediate ) )>Intermediate</div>
-									<div class="@GetDifficultyButtonClass( AiDifficulty.Hard )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Hard ) )>Hard</div>
 								</div>
 								@if ( Game.SelectedCardIndex >= 0 )
 								{
@@ -373,7 +379,7 @@
 
 	string GetDifficultyButtonClass( AiDifficulty difficulty )
 	{
-		return Game?.Difficulty == difficulty ? "mode-button active" : "mode-button";
+		return Game?.Difficulty == difficulty ? "difficulty-button active" : "difficulty-button";
 	}
 
 	string GetPieceImageClass( UnitData unit )
