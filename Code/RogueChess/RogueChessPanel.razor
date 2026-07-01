@@ -37,7 +37,7 @@
 						<div class="intro-step">Then click a highlighted tile to move, or a highlighted enemy to attack.</div>
 						<div class="intro-step">You may also play one card from your hand before or after the unit action.</div>
 						<div class="intro-step">When you are done, click End Turn.</div>
-						<div class="intro-step">The mode button can switch between Player vs Computer, Player vs Player, and Computer vs Computer.</div>
+						<div class="intro-step">The mode button can switch between Player vs Computer and Computer vs Computer.</div>
 					</div>
 				}
 				else if ( IntroPage == 2 )
@@ -265,7 +265,6 @@
 							<div class="action-button" onclick=@Game.HandleTurnButton>@TurnButtonText</div>
 							<div class="action-button" onclick=@Game.RestartMatch>Restart Match</div>
 							<div class="mode-button-row">
-								<div class="@GetModeButtonClass( RogueChessMode.PlayerVsPlayer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsPlayer ) )>PVP</div>
 								<div class="@GetModeButtonClass( RogueChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsComputer ) )>PVE</div>
 								<div class="@GetModeButtonClass( RogueChessMode.ComputerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.ComputerVsComputer ) )>PVC</div>
 							</div>
