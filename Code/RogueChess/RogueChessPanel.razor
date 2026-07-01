@@ -262,19 +262,26 @@
 							}
 						</div>
 						<div class="actions">
-							<div class="action-button" onclick=@Game.HandleTurnButton>@TurnButtonText</div>
-							<div class="action-button" onclick=@Game.RestartMatch>Restart Match</div>
-							<div class="mode-button-row">
-								<div class="@GetModeButtonClass( RogueChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsComputer ) )>PVE</div>
-								<div class="@GetModeButtonClass( RogueChessMode.ComputerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.ComputerVsComputer ) )>PVC</div>
-							</div>
-							@if ( Game.SelectedCardIndex >= 0 )
+							@if ( Game.Winner is not null )
 							{
-								<div class="action-button cancel" onclick=@Game.CancelSelectedCard>Cancel Card</div>
+								<div class="action-button play-again" onclick=@Game.RestartMatch>Play Again</div>
 							}
 							else
 							{
-								<div class="action-button" onclick=@ShowHowToPlay>How To Play</div>
+								<div class="action-button" onclick=@Game.HandleTurnButton>@TurnButtonText</div>
+								<div class="action-button" onclick=@Game.RestartMatch>Restart Match</div>
+								<div class="mode-button-row">
+									<div class="@GetModeButtonClass( RogueChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsComputer ) )>PVE</div>
+									<div class="@GetModeButtonClass( RogueChessMode.ComputerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.ComputerVsComputer ) )>PVC</div>
+								</div>
+								@if ( Game.SelectedCardIndex >= 0 )
+								{
+									<div class="action-button cancel" onclick=@Game.CancelSelectedCard>Cancel Card</div>
+								}
+								else
+								{
+									<div class="action-button" onclick=@ShowHowToPlay>How To Play</div>
+								}
 							}
 						</div>
 					</div>
