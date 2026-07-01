@@ -91,6 +91,7 @@ public sealed class RogueChessGameComponent : Component
 	float nextAiActionTime;
 	float nextBackgroundSoundRetryTime;
 	int turnsSinceLastAttack;
+	RogueChessTeam pvcHardTeam;
 	readonly Dictionary<int, GridPos> previousTileByUnit = new();
 	SoundEvent backgroundSoundEvent;
 	SoundHandle backgroundSoundHandle;
@@ -159,6 +160,7 @@ public sealed class RogueChessGameComponent : Component
 		IsDraw = false;
 		turnsSinceLastAttack = 0;
 		previousTileByUnit.Clear();
+		AssignPvcDifficulties();
 
 		AddUnit( RogueChessTeam.Blue, UnitType.Commander, new GridPos( 3, 7 ) );
 		AddUnit( RogueChessTeam.Blue, UnitType.Buddy, new GridPos( 2, 7 ) );
@@ -173,6 +175,9 @@ public sealed class RogueChessGameComponent : Component
 	public void SetMode( RogueChessMode mode )
 	{
 		Mode = mode;
+
+		if ( Mode == RogueChessMode.ComputerVsComputer )
+			AssignPvcDifficulties();
 
 		ClearSelection();
 
@@ -575,7 +580,7 @@ public sealed class RogueChessGameComponent : Component
 		}
 
 		var scrapGain = 1 + units.Count( unit => unit.Team == team && ResourceTiles.Contains( unit.Position ) );
-		if ( Difficulty == AiDifficulty.Hard && IsComputerControlled( team ) )
+		if ( DifficultyFor( team ) == AiDifficulty.Hard && IsComputerControlled( team ) )
 			scrapGain += 1;
 		SetScrap( team, GetScrap( team ) + scrapGain );
 		DrawCard( team );
@@ -591,18 +596,44 @@ public sealed class RogueChessGameComponent : Component
 			nextAiActionTime = Time.Now + AiActionDelay;
 	}
 
-	float AiActionDelay => Difficulty switch
+	// Computer-vs-Computer plays at a steady, watchable pace; otherwise speed scales with difficulty.
+	float AiActionDelay
 	{
-		AiDifficulty.Intermediate => 0.5f,
-		AiDifficulty.Hard => 0.3f,
-		_ => 0.65f
-	};
+		get
+		{
+			if ( Mode == RogueChessMode.ComputerVsComputer )
+				return 1.0f;
+
+			return ActiveDifficulty switch
+			{
+				AiDifficulty.Intermediate => 0.5f,
+				AiDifficulty.Hard => 0.3f,
+				_ => 0.65f
+			};
+		}
+	}
 
 	// Intermediate and Hard attack any enemy in range before collecting Scrap.
-	bool AiAttacksBeforeResources => Difficulty != AiDifficulty.Beginner;
+	bool AiAttacksBeforeResources => ActiveDifficulty != AiDifficulty.Beginner;
 
 	// Intermediate and Hard reinforce whenever they can afford it.
-	bool AiBuildsEagerly => Difficulty != AiDifficulty.Beginner;
+	bool AiBuildsEagerly => ActiveDifficulty != AiDifficulty.Beginner;
+
+	// In Computer-vs-Computer each side is randomly Intermediate or Hard; otherwise the chosen Difficulty applies.
+	public AiDifficulty DifficultyFor( RogueChessTeam team )
+	{
+		if ( Mode == RogueChessMode.ComputerVsComputer )
+			return team == pvcHardTeam ? AiDifficulty.Hard : AiDifficulty.Intermediate;
+
+		return Difficulty;
+	}
+
+	AiDifficulty ActiveDifficulty => DifficultyFor( CurrentTeam );
+
+	void AssignPvcDifficulties()
+	{
+		pvcHardTeam = Random.Shared.Next( 2 ) == 0 ? RogueChessTeam.Blue : RogueChessTeam.Red;
+	}
 
 	void DrawCard( RogueChessTeam team )
 	{
