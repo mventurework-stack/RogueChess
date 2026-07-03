@@ -103,7 +103,9 @@ namespace StrategyGame
 
 			bodies.Add( ("rule", () => { AiAttackPhase( team ); AiMovePhase( team ); }) );
 			bodies.Add( ("advance", () => { AiMovePhase( team ); }) );
-			bodies.Add( ("hold", () => { }) );
+			// NOTE: no whole-turn "hold" candidate — it let the search idle an entire turn (turtling).
+			// AiMovePhase already holds individual units that can't advance safely (IsSafeDestination),
+			// so the AI still won't walk into danger, but it will always make progress when it can.
 
 			// HYBRID card delegation: each candidate turn also runs the rule-based TryAiPlayCard in the
 			// before window and the after window — cards are played deterministically alongside the searched
@@ -171,18 +173,30 @@ namespace StrategyGame
 			var cands = CandidateTurns( me );
 			Action bestPlay = cands.Count > 0 ? cands[0].play : () => { };
 
-			foreach ( var (_, play) in cands )
+			// The whole search (including the returned closure's evaluation) runs in simulation mode so
+			// AttackUnit/MoveUnit don't fire sounds or leave hit/death visuals on the live board. The
+			// chosen turn is applied OUTSIDE this method (by RunAiTurn) with effects re-enabled.
+			isSimulating = true;
+			try
 			{
-				var snap = Snapshot();
-				play();
-				if ( !IsGameOver )
-					AdvanceTurn( false );
-				double v = Minimax( plies - 1, alpha, beta, me );
-				Restore( snap );
+				foreach ( var (_, play) in cands )
+				{
+					var snap = Snapshot();
+					play();
+					if ( !IsGameOver )
+						AdvanceTurn( false );
+					double v = Minimax( plies - 1, alpha, beta, me );
+					Restore( snap );
 
-				if ( v > best ) { best = v; bestPlay = play; }
-				if ( best > alpha ) alpha = best;
+					if ( v > best ) { best = v; bestPlay = play; }
+					if ( best > alpha ) alpha = best;
+				}
 			}
+			finally
+			{
+				isSimulating = false;
+			}
+
 			return bestPlay;
 		}
 

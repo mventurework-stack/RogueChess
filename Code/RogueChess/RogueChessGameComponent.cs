@@ -214,6 +214,10 @@ public sealed partial class RogueChessGameComponent : Component
 	int blueOwnTurns; // per-team own-turn counter for the half-rate draw
 	int redOwnTurns;
 	bool isRunningAi;
+	// True while the minimax is simulating candidate turns. Suppresses presentation side effects
+	// (sounds, hit/death visuals) that Snapshot/Restore can't undo, so the search doesn't smear
+	// hundreds of simulated attacks onto the live board.
+	bool isSimulating;
 	string lastAiAction = "";
 	float nextAiActionTime;
 	float nextBackgroundSoundRetryTime;
@@ -910,6 +914,12 @@ public sealed partial class RogueChessGameComponent : Component
 
 	void ScheduleAiIfNeeded()
 	{
+		// StartTurn calls this, and StartTurn runs hundreds of times inside the minimax search.
+		// nextAiActionTime is not part of Snapshot/Restore, so scheduling during a simulated turn
+		// would corrupt the real AI-turn clock. Never touch the clock while simulating.
+		if ( isSimulating )
+			return;
+
 		if ( IsCurrentAiTurn() )
 			nextAiActionTime = Time.Now + AiActionDelay;
 	}
@@ -1048,12 +1058,18 @@ public sealed partial class RogueChessGameComponent : Component
 
 	void AddHitEffect( GridPos pos )
 	{
+		if ( isSimulating )
+			return; // don't smear simulated-attack visuals onto the live board
+
 		boardEffects.RemoveAll( effect => effect.Position == pos && effect.EffectType == "hit" );
 		boardEffects.Add( new BoardEffect( pos, "hit", Time.Now, Time.Now + HitEffectDuration ) );
 	}
 
 	void AddDyingUnitVisual( UnitData unit )
 	{
+		if ( isSimulating )
+			return; // don't smear simulated-death visuals onto the live board
+
 		dyingUnitVisuals.RemoveAll( visual => visual.Position == unit.Position );
 		dyingUnitVisuals.Add( new DyingUnitVisual( unit.Position, unit.Type, unit.Team, Time.Now, Time.Now + DeathEffectDuration ) );
 	}
@@ -1093,6 +1109,9 @@ public sealed partial class RogueChessGameComponent : Component
 
 	void PlayUiSound( SoundEvent soundEvent, string fallbackPath, float volume )
 	{
+		if ( isSimulating )
+			return; // no audio while the minimax is simulating candidate turns
+
 		if ( soundEvent is not null && TryPlaySoundEvent( soundEvent, volume ) )
 			return;
 
