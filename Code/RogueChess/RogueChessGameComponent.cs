@@ -8,9 +8,10 @@ namespace StrategyGame;
 
 public enum AiDifficulty
 {
+	// Beginner = the former "Hard" rule-based behavior. Normal is a placeholder that uses the same logic
+	// for now; it will switch to the minimax AI once that is ported (Stage 3).
 	Beginner,
-	Intermediate,
-	Hard
+	Normal
 }
 
 /// <summary>
@@ -19,7 +20,7 @@ public enum AiDifficulty
 /// UseEmbeddedPanel enabled to spawn the UI through a ScreenPanel automatically.
 /// </summary>
 [Title( "Rogue Chess Game" ), Category( "Prototype" ), Icon( "grid_on" )]
-public sealed class RogueChessGameComponent : Component
+public sealed partial class RogueChessGameComponent : Component
 {
 	public const int BoardSize = 8;
 	public const int ArmySlotCount = 8;
@@ -44,24 +45,26 @@ public sealed class RogueChessGameComponent : Component
 		new( 5, 5 )
 	};
 
+	// Heroes card set = Focus, Guard, Sprint, Reboot, Push (5 cards). BuildBuddy/Repair are excluded
+	// from the rotation (their enum/effect code remains but is never drawn).
 	static readonly CardType[] DeckOrder =
 	{
 		CardType.Guard,
 		CardType.Push,
 		CardType.Reboot,
 		CardType.Focus,
-		CardType.Sprint,
-		CardType.BuildBuddy,
-		CardType.Repair
+		CardType.Sprint
 	};
 
+	// The player picks HEROES only (Buddy is auto-filled), so Buddy is not in the selectable pool.
 	static readonly UnitType[] SelectableArmyTypes =
 	{
-		UnitType.Buddy,
 		UnitType.Shooter,
 		UnitType.Tank,
 		UnitType.Hacker
 	};
+
+	const int HeroSlotCount = 3; // player picks exactly 3 heroes; the other 4 non-Commander slots auto-fill with Buddy
 
 	static readonly UnitType[] DefaultArmyChoices =
 	{
@@ -113,7 +116,7 @@ public sealed class RogueChessGameComponent : Component
 	[Property] public SoundEvent BackgroundSound { get; set; }
 
 	public RogueChessMode Mode { get; private set; } = RogueChessMode.PlayerVsComputer;
-	public AiDifficulty Difficulty { get; private set; } = AiDifficulty.Intermediate;
+	public AiDifficulty Difficulty { get; private set; } = AiDifficulty.Beginner;
 	public RogueChessTeam CurrentTeam { get; private set; }
 	public RogueChessTeam? Winner { get; private set; }
 	public string WinReason { get; private set; }
@@ -121,12 +124,64 @@ public sealed class RogueChessGameComponent : Component
 	public bool IsGameOver => Winner is not null || IsDraw;
 	public int BlueScrap { get; private set; }
 	public int RedScrap { get; private set; }
-	public bool UnitActionSpent { get; private set; }
-	public bool CardPlayed { get; private set; }
+	// Separated move-phase turn structure:
+	//  - Move phase: up to MoveSlotsPerTurn DIFFERENT friendly units may each move once (reposition only).
+	//  - Attack phase: exactly 1 attack, only by a unit that did NOT use a move slot this turn.
+	// Moving and attacking are fully separate actions on fully separate units — no move-then-attack combo.
+	public const int MoveSlotsPerTurn = 3;
+	public int MovesUsedThisTurn { get; private set; }
+	public bool AttackUsedThisTurn { get; private set; }
+	int attackerUnitIdThisTurn = -1;
+	readonly HashSet<int> movedUnitIdsThisTurn = new();
+
+	// Legacy alias kept for UI/human code paths: "any unit action taken this turn".
+	public bool UnitActionSpent => MovesUsedThisTurn > 0 || AttackUsedThisTurn;
+
+	bool CanUnitMove( UnitData u ) =>
+		u.Team == CurrentTeam && u.CanActThisTurn
+		&& MovesUsedThisTurn < MoveSlotsPerTurn
+		&& !movedUnitIdsThisTurn.Contains( u.Id )
+		&& u.Id != attackerUnitIdThisTurn;
+
+	bool CanUnitAttack( UnitData a ) =>
+		a.Team == CurrentTeam && a.CanActThisTurn
+		&& !AttackUsedThisTurn
+		&& !movedUnitIdsThisTurn.Contains( a.Id );
+
+	// Two card windows per turn: one before the move phase, one after all actions.
+	public bool CardPlayedBeforeAction { get; private set; }
+	public bool CardPlayedAfterAction { get; private set; }
+	public bool CanPlayCard => UnitActionSpent ? !CardPlayedAfterAction : !CardPlayedBeforeAction;
+
+	// UI helpers for the move-phase turn display.
+	public bool AttackAvailableThisTurn => !AttackUsedThisTurn;
+
+	public string GetSelectedUnitEligibility()
+	{
+		var unit = GetSelectedUnit();
+		if ( unit is null || unit.Team != CurrentTeam )
+			return "";
+
+		if ( unit.Id == attackerUnitIdThisTurn )
+			return "Attacked this turn — done";
+		if ( movedUnitIdsThisTurn.Contains( unit.Id ) )
+			return "Moved this turn — cannot attack";
+
+		var canMove = CanUnitMove( unit );
+		var canAttack = CanUnitAttack( unit ) && units.Any( e => e.Team != unit.Team && IsLegalAttack( unit, e ) );
+		if ( canMove && canAttack )
+			return "Eligible to move or attack";
+		if ( canMove )
+			return "Eligible to move";
+		if ( canAttack )
+			return "Eligible to attack";
+		return "No action available this turn";
+	}
+
 	public int SelectedUnitId { get; private set; } = -1;
 	public int SelectedCardIndex { get; private set; } = -1;
 	public bool MatchStarted { get; private set; }
-	public UnitType SelectedArmyBuilderUnit { get; private set; } = UnitType.Buddy;
+	public UnitType SelectedArmyBuilderUnit { get; private set; } = UnitType.Shooter;
 	public int UiVersion { get; private set; }
 	public string StatusMessage { get; private set; } = "";
 	public int TurnNumber { get; private set; }
@@ -136,9 +191,14 @@ public sealed class RogueChessGameComponent : Component
 	public IReadOnlyList<CardType> RedHand => redHand;
 	public IReadOnlyList<UnitType?> BlueArmyChoices => blueArmyChoices;
 	public IReadOnlyList<UnitType?> RedArmyChoices => redArmyChoices;
-	public IReadOnlyList<UnitType> UnitPoolTypes => SelectableArmyTypes;
+	// Returned from a property getter (not the static field) so the pool refreshes on hot-reload —
+	// static field initializers don't re-run on hot-reload, which stranded the old Buddy-in-pool list.
+	public IReadOnlyList<UnitType> UnitPoolTypes => new[] { UnitType.Shooter, UnitType.Tank, UnitType.Hacker };
 	public int BlueArmyFilledSlots => blueArmyChoices.Count( type => type.HasValue );
 	public bool IsBlueArmyComplete => BlueArmyFilledSlots == ArmySlotCount;
+	// Heroes = non-Commander, non-Buddy picks. The pick counter tracks this out of HeroSlotCount (3).
+	public int HeroCount => blueArmyChoices.Count( type => type is UnitType.Shooter or UnitType.Tank or UnitType.Hacker );
+	public int HeroPickTarget => HeroSlotCount;
 
 	readonly List<UnitData> units = new();
 	readonly List<CardType> blueHand = new();
@@ -151,12 +211,13 @@ public sealed class RogueChessGameComponent : Component
 	int nextUnitId = 1;
 	int blueDeckIndex;
 	int redDeckIndex;
+	int blueOwnTurns; // per-team own-turn counter for the half-rate draw
+	int redOwnTurns;
 	bool isRunningAi;
 	string lastAiAction = "";
 	float nextAiActionTime;
 	float nextBackgroundSoundRetryTime;
 	int turnsSinceLastAttack;
-	RogueChessTeam pvcHardTeam;
 	readonly Dictionary<int, GridPos> previousTileByUnit = new();
 	SoundEvent backgroundSoundEvent;
 	SoundHandle backgroundSoundHandle;
@@ -211,7 +272,7 @@ public sealed class RogueChessGameComponent : Component
 	{
 		if ( !IsBlueArmyComplete )
 		{
-			StatusMessage = $"Choose {SelectableArmySlotCount} units to join your Commander before starting the match.";
+			StatusMessage = $"Choose {HeroSlotCount} heroes to join your Commander before starting the match.";
 			MarkDirty();
 			return;
 		}
@@ -226,6 +287,8 @@ public sealed class RogueChessGameComponent : Component
 		nextUnitId = 1;
 		blueDeckIndex = 0;
 		redDeckIndex = 0;
+		blueOwnTurns = 0;
+		redOwnTurns = 0;
 		BlueScrap = 0;
 		RedScrap = 0;
 		Winner = null;
@@ -234,7 +297,6 @@ public sealed class RogueChessGameComponent : Component
 		IsDraw = false;
 		turnsSinceLastAttack = 0;
 		previousTileByUnit.Clear();
-		AssignPvcDifficulties();
 
 		AddStartingArmy( RogueChessTeam.Blue );
 		AddStartingArmy( RogueChessTeam.Red );
@@ -251,7 +313,7 @@ public sealed class RogueChessGameComponent : Component
 		boardEffects.Clear();
 		dyingUnitVisuals.Clear();
 		ClearSelection();
-		StatusMessage = $"Choose {SelectableArmySlotCount} units to join your Commander.";
+		StatusMessage = $"Choose {HeroSlotCount} heroes to join your Commander.";
 		MarkDirty();
 	}
 
@@ -286,17 +348,31 @@ public sealed class RogueChessGameComponent : Component
 		if ( MatchStarted || index < 0 || index >= ArmySlotCount || index == CommanderArmySlotIndex )
 			return;
 
-		if ( blueArmyChoices[index] == SelectedArmyBuilderUnit )
+		var current = blueArmyChoices[index];
+
+		// Clicking a slot that already holds the selected hero toggles it off.
+		if ( current == SelectedArmyBuilderUnit )
 		{
 			ClearBlueArmySlot( index );
 			return;
 		}
 
-		var previous = blueArmyChoices[index];
+		// Only heroes are placed manually; Buddies are auto-filled. Cap at HeroSlotCount unless this
+		// click is swapping the hero already in this slot.
+		bool slotHasHero = current is UnitType.Shooter or UnitType.Tank or UnitType.Hacker;
+		if ( !slotHasHero && HeroCount >= HeroSlotCount )
+		{
+			StatusMessage = $"You already chose {HeroSlotCount} heroes. Remove one to change your picks.";
+			MarkDirty();
+			return;
+		}
+
 		blueArmyChoices[index] = SelectedArmyBuilderUnit;
-		StatusMessage = previous.HasValue
-			? $"Army slot {index + 1} replaced with {SelectedArmyBuilderUnit}."
-			: $"Army slot {index + 1} set to {SelectedArmyBuilderUnit}.";
+		NormalizeAutoBuddies();
+
+		StatusMessage = HeroCount >= HeroSlotCount
+			? $"{HeroSlotCount} heroes chosen — remaining slots auto-filled with Buddies. Start Game unlocked."
+			: $"Hero placed ({HeroCount}/{HeroSlotCount}). Choose {HeroSlotCount - HeroCount} more.";
 		MarkDirty();
 	}
 
@@ -306,17 +382,36 @@ public sealed class RogueChessGameComponent : Component
 			return;
 
 		var removed = blueArmyChoices[index].Value;
+		// Auto-filled Buddies aren't manually removable — only heroes are.
+		if ( removed == UnitType.Buddy )
+			return;
+
 		blueArmyChoices[index] = null;
-		StatusMessage = $"Removed {removed} from army slot {index + 1}.";
+		NormalizeAutoBuddies(); // drops the auto-Buddies now that we're below HeroSlotCount
+		StatusMessage = $"Removed {removed}. Choose {HeroSlotCount - HeroCount} more hero(es).";
 		MarkDirty();
+	}
+
+	// Keep the auto-Buddy fill consistent: once all 3 heroes are placed, fill the remaining empty
+	// non-Commander slots with Buddy; otherwise clear any auto-Buddies so those slots reopen for picking.
+	void NormalizeAutoBuddies()
+	{
+		bool full = HeroCount >= HeroSlotCount;
+		for ( var i = 0; i < ArmySlotCount; i++ )
+		{
+			if ( i == CommanderArmySlotIndex )
+				continue;
+
+			if ( full && !blueArmyChoices[i].HasValue )
+				blueArmyChoices[i] = UnitType.Buddy;
+			else if ( !full && blueArmyChoices[i] == UnitType.Buddy )
+				blueArmyChoices[i] = null;
+		}
 	}
 
 	public void SetMode( RogueChessMode mode )
 	{
 		Mode = mode;
-
-		if ( Mode == RogueChessMode.ComputerVsComputer )
-			AssignPvcDifficulties();
 
 		ClearSelection();
 
@@ -431,27 +526,35 @@ public sealed class RogueChessGameComponent : Component
 		}
 
 		var selected = GetSelectedUnit();
-		if ( selected is null || UnitActionSpent )
+		if ( selected is null )
 		{
 			ClearSelection();
-			StatusMessage = UnitActionSpent ? "Unit action already spent this turn." : "Select one of your units first.";
+			StatusMessage = "Select one of your units first.";
 			MarkDirty();
 			return;
 		}
 
+		// Move phase: up to 3 different units may each move; per-unit eligibility is enforced by IsLegalMove.
 		if ( unit is null && IsLegalMove( selected, pos ) )
 		{
 			MoveUnit( selected, pos );
 			return;
 		}
 
+		// Attack phase: exactly 1 attack, only by a unit that did not move this turn (enforced by IsLegalAttack).
 		if ( unit is not null && unit.Team != CurrentTeam && IsLegalAttack( selected, unit ) )
 		{
 			AttackUnit( selected, unit );
 			return;
 		}
 
-		StatusMessage = "No legal action for that tile.";
+		StatusMessage = selected.Id == attackerUnitIdThisTurn
+			? $"{selected.Type} already attacked this turn."
+			: movedUnitIdsThisTurn.Contains( selected.Id )
+				? $"{selected.Type} already moved this turn and cannot attack."
+				: MovesUsedThisTurn >= MoveSlotsPerTurn && !AttackUsedThisTurn
+					? "All 3 moves used. You may still attack with a unit that hasn't moved."
+					: "No legal action for that tile.";
 		MarkDirty();
 	}
 
@@ -471,9 +574,11 @@ public sealed class RogueChessGameComponent : Component
 		if ( index < 0 || index >= hand.Count )
 			return;
 
-		if ( CardPlayed )
+		if ( !CanPlayCard )
 		{
-			StatusMessage = "Only one card can be played each turn.";
+			StatusMessage = UnitActionSpent
+				? "You already played a card after your unit action this turn."
+				: "You already played a card before your action. Take your unit action, then you may play one more.";
 			MarkDirty();
 			return;
 		}
@@ -548,8 +653,9 @@ public sealed class RogueChessGameComponent : Component
 		else
 		{
 			var selected = GetSelectedUnit();
-			if ( selected is not null && !UnitActionSpent )
+			if ( selected is not null )
 			{
+				// IsLegalMove / IsLegalAttack already enforce per-unit move-phase eligibility.
 				if ( unit is null && IsLegalMove( selected, pos ) )
 					classes.Add( "legal-move" );
 
@@ -570,7 +676,7 @@ public sealed class RogueChessGameComponent : Component
 			return "CARD";
 
 		var selected = GetSelectedUnit();
-		if ( selected is null || UnitActionSpent )
+		if ( selected is null )
 			return "";
 
 		if ( unit is null && IsLegalMove( selected, pos ) )
@@ -667,7 +773,7 @@ public sealed class RogueChessGameComponent : Component
 		if ( index == SelectedCardIndex && team == CurrentTeam )
 			classes.Add( "selected" );
 
-		if ( CardPlayed || index < 0 || index >= hand.Count || GetScrap( team ) < CardData.All[hand[index]].Cost || team != CurrentTeam || IsComputerControlled( team ) )
+		if ( !CanPlayCard || index < 0 || index >= hand.Count || GetScrap( team ) < CardData.All[hand[index]].Cost || team != CurrentTeam || IsComputerControlled( team ) )
 			classes.Add( "disabled" );
 
 		return string.Join( " ", classes );
@@ -749,8 +855,12 @@ public sealed class RogueChessGameComponent : Component
 	void StartTurn( RogueChessTeam team )
 	{
 		CurrentTeam = team;
-		UnitActionSpent = false;
-		CardPlayed = false;
+		MovesUsedThisTurn = 0;
+		AttackUsedThisTurn = false;
+		attackerUnitIdThisTurn = -1;
+		movedUnitIdsThisTurn.Clear();
+		CardPlayedBeforeAction = false;
+		CardPlayedAfterAction = false;
 		SelectedCardIndex = -1;
 		SelectedUnitId = -1;
 		TurnNumber++;
@@ -784,10 +894,14 @@ public sealed class RogueChessGameComponent : Component
 		}
 
 		var scrapGain = 1 + units.Count( unit => unit.Team == team && ResourceTiles.Contains( unit.Position ) );
-		if ( DifficultyFor( team ) == AiDifficulty.Hard && IsComputerControlled( team ) )
+		if ( IsComputerControlled( team ) )
 			scrapGain += 1;
 		SetScrap( team, GetScrap( team ) + scrapGain );
-		DrawCard( team );
+
+		// Half-rate draw: each team draws only every OTHER of its own turns (deterministic, no luck).
+		var ownTurns = team == RogueChessTeam.Blue ? ++blueOwnTurns : ++redOwnTurns;
+		if ( ownTurns % 2 == 1 )
+			DrawCard( team );
 
 		StatusMessage = $"{TeamName( team )} starts turn and gains {scrapGain} Scrap.";
 		ScheduleAiIfNeeded();
@@ -800,43 +914,18 @@ public sealed class RogueChessGameComponent : Component
 			nextAiActionTime = Time.Now + AiActionDelay;
 	}
 
-	// Computer-vs-Computer plays at a steady, watchable pace; otherwise speed scales with difficulty.
-	float AiActionDelay
-	{
-		get
-		{
-			if ( Mode == RogueChessMode.ComputerVsComputer )
-				return 1.0f;
+	// Computer-vs-Computer plays at a steady, watchable pace; otherwise a single responsive rule-based pace.
+	float AiActionDelay => Mode == RogueChessMode.ComputerVsComputer ? 1.0f : 0.3f;
 
-			return ActiveDifficulty switch
-			{
-				AiDifficulty.Intermediate => 0.5f,
-				AiDifficulty.Hard => 0.3f,
-				_ => 0.65f
-			};
-		}
-	}
+	// Both current tiers use the former "Hard" rule-based behavior: attack before collecting Scrap, and
+	// reinforce eagerly. (Normal will diverge once the minimax AI is ported.)
+	bool AiAttacksBeforeResources => true;
+	bool AiBuildsEagerly => true;
 
-	// Intermediate and Hard attack any enemy in range before collecting Scrap.
-	bool AiAttacksBeforeResources => ActiveDifficulty != AiDifficulty.Beginner;
-
-	// Intermediate and Hard reinforce whenever they can afford it.
-	bool AiBuildsEagerly => ActiveDifficulty != AiDifficulty.Beginner;
-
-	// In Computer-vs-Computer each side is randomly Intermediate or Hard; otherwise the chosen Difficulty applies.
+	// Two tiers only; the chosen Difficulty always applies (no per-side randomization).
 	public AiDifficulty DifficultyFor( RogueChessTeam team )
 	{
-		if ( Mode == RogueChessMode.ComputerVsComputer )
-			return team == pvcHardTeam ? AiDifficulty.Hard : AiDifficulty.Intermediate;
-
 		return Difficulty;
-	}
-
-	AiDifficulty ActiveDifficulty => DifficultyFor( CurrentTeam );
-
-	void AssignPvcDifficulties()
-	{
-		pvcHardTeam = Random.Shared.Next( 2 ) == 0 ? RogueChessTeam.Blue : RogueChessTeam.Red;
 	}
 
 	void DrawCard( RogueChessTeam team )
@@ -872,7 +961,8 @@ public sealed class RogueChessGameComponent : Component
 		previousTileByUnit[unit.Id] = from;
 		unit.Position = destination;
 		unit.SprintMoveBonus = 0;
-		UnitActionSpent = true;
+		MovesUsedThisTurn++;
+		movedUnitIdsThisTurn.Add( unit.Id );
 		ClearSelection();
 		ApplyHackerDisable( unit );
 		PlayUnitMoveSound();
@@ -917,7 +1007,8 @@ public sealed class RogueChessGameComponent : Component
 
 		attacker.FocusDamageBonus = 0;
 		attacker.SprintMoveBonus = 0;
-		UnitActionSpent = true;
+		AttackUsedThisTurn = true;
+		attackerUnitIdThisTurn = attacker.Id;
 		ClearSelection();
 
 		if ( defender.Health <= 0 )
@@ -1082,15 +1173,20 @@ public sealed class RogueChessGameComponent : Component
 	bool TryPlaySelectedCardAt( GridPos pos )
 	{
 		var hand = GetHand( CurrentTeam );
-		if ( SelectedCardIndex < 0 || SelectedCardIndex >= hand.Count || CardPlayed )
+		if ( SelectedCardIndex < 0 || SelectedCardIndex >= hand.Count || !CanPlayCard )
 			return false;
 
 		var card = hand[SelectedCardIndex];
+		// Capture which window this play consumes before the effect runs (the action flag is unchanged by cards).
+		var afterAction = UnitActionSpent;
 		if ( !TryPlayCardAt( CurrentTeam, card, pos ) )
 			return false;
 
 		hand.RemoveAt( SelectedCardIndex );
-		CardPlayed = true;
+		if ( afterAction )
+			CardPlayedAfterAction = true;
+		else
+			CardPlayedBeforeAction = true;
 		SelectedCardIndex = -1;
 		CheckCommanderVictory();
 		MarkDirty();
@@ -1135,14 +1231,16 @@ public sealed class RogueChessGameComponent : Component
 				return true;
 
 			case CardType.Focus:
-				if ( UnitActionSpent || target is null || target.Team != team )
+				// Buffs the next attack, so it must go on a unit still eligible to attack this turn (a non-mover).
+				if ( target is null || target.Team != team || !CanUnitAttack( target ) )
 					return false;
 
 				target.FocusDamageBonus = 1;
 				return true;
 
 			case CardType.Sprint:
-				if ( UnitActionSpent || target is null || target.Team != team )
+				// Buffs a move, so it must go on a unit still eligible to move this turn.
+				if ( target is null || target.Team != team || !CanUnitMove( target ) )
 					return false;
 
 				target.SprintMoveBonus = 1;
@@ -1197,8 +1295,8 @@ public sealed class RogueChessGameComponent : Component
 		{
 			CardType.Guard => target is not null && target.Team == team,
 			CardType.Push => target is not null && target.Team != team && TryGetPushDestination( team, target, out _ ),
-			CardType.Focus => !UnitActionSpent && target is not null && target.Team == team,
-			CardType.Sprint => !UnitActionSpent && target is not null && target.Team == team,
+			CardType.Focus => target is not null && target.Team == team && CanUnitAttack( target ),
+			CardType.Sprint => target is not null && target.Team == team && CanUnitMove( target ),
 			CardType.BuildBuddy => target is null && pos.IsInsideBoard && commander is not null && commander.Position.ManhattanDistance( pos ) == 1,
 			CardType.Repair => target is not null && target.Team == team && target.Health < target.MaxHealth,
 			CardType.Reboot => target is not null && target.Team == team && ( target.DisabledTurns > 0 || target.IsDisabledThisTurn ),
@@ -1239,44 +1337,72 @@ public sealed class RogueChessGameComponent : Component
 
 	bool IsLegalAttack( UnitData attacker, UnitData defender )
 	{
-		return attacker.Team == CurrentTeam
-			&& attacker.CanActThisTurn
-			// Hackers attack normally (1 dmg, range 1); their disable is a passive rider on movement,
-			// so a Hacker either attacks or moves-and-disables in a turn, never both.
+		// Omnidirectional Chebyshev-range attack, no line-of-sight blocking. AttackRange 0 = cannot attack.
+		// Still gated to a unit that did NOT move this turn (one attack per turn).
+		return CanUnitAttack( attacker )
+			&& attacker.AttackRange > 0
 			&& defender.Team != attacker.Team
-			&& attacker.Position.ManhattanDistance( defender.Position ) <= attacker.AttackRange
-			&& HasLineOfSight( attacker.Position, defender.Position );
+			&& attacker.Position.ChebyshevDistance( defender.Position ) <= attacker.AttackRange;
 	}
 
+	// Chess-style sliding movement, gated by turn eligibility. Delegates the tile geometry to
+	// ComputeSlidingDestinations so movement rules stay in one place (used by legality + AI).
 	List<GridPos> GetLegalMoves( UnitData unit )
 	{
-		var legal = new List<GridPos>();
-		if ( unit.Team != CurrentTeam || UnitActionSpent || !unit.CanActThisTurn )
-			return legal;
+		if ( !CanUnitMove( unit ) )
+			return new List<GridPos>();
 
-		var visited = new HashSet<GridPos> { unit.Position };
-		var queue = new Queue<(GridPos Position, int Distance)>();
-		queue.Enqueue( (unit.Position, 0) );
+		return ComputeSlidingDestinations( unit );
+	}
 
-		while ( queue.Count > 0 )
+	// Pure movement geometry (turn-phase agnostic): sliding along the unit's allowed directions up to its
+	// move distance, stopping BEFORE the first occupied tile. Plus the Shooter's bent Option B path.
+	List<GridPos> ComputeSlidingDestinations( UnitData unit )
+	{
+		var dests = new HashSet<GridPos>();
+
+		// Option A / standard slide along the unit's direction set.
+		foreach ( var direction in unit.MoveDirectionSet )
 		{
-			var current = queue.Dequeue();
-			if ( current.Distance >= unit.CurrentMoveRange )
-				continue;
-
-			foreach ( var direction in GridPos.CardinalDirections )
+			var cursor = unit.Position;
+			for ( var step = 1; step <= unit.CurrentMoveRange; step++ )
 			{
-				var next = current.Position.Offset( direction );
-				if ( !next.IsInsideBoard || visited.Contains( next ) || GetUnitAt( next ) is not null )
-					continue;
-
-				visited.Add( next );
-				legal.Add( next );
-				queue.Enqueue( (next, current.Distance + 1) );
+				cursor = cursor.Offset( direction );
+				if ( !cursor.IsInsideBoard || GetUnitAt( cursor ) is not null )
+					break;
+				dests.Add( cursor );
 			}
 		}
 
-		return legal;
+		// Option B (Shooter only): one orthogonal step onto an EMPTY tile, then an optional diagonal
+		// slide of up to 2 (+ Sprint bonus) more tiles from there. Breaks the diagonal color-lock.
+		if ( unit.Type == UnitType.Shooter )
+		{
+			foreach ( var odir in GridPos.CardinalDirections )
+			{
+				var mid = unit.Position.Offset( odir );
+				if ( !mid.IsInsideBoard || GetUnitAt( mid ) is not null )
+					continue; // ortho step must land empty; otherwise this bent option is unavailable
+
+				dests.Add( mid ); // may stop right after the single orthogonal step
+
+				var bentDiag = 2 + unit.SprintMoveBonus;
+				foreach ( var ddir in GridPos.DiagonalDirections )
+				{
+					var cursor = mid;
+					for ( var step = 1; step <= bentDiag; step++ )
+					{
+						cursor = cursor.Offset( ddir );
+						if ( !cursor.IsInsideBoard || GetUnitAt( cursor ) is not null )
+							break;
+						dests.Add( cursor );
+					}
+				}
+			}
+		}
+
+		dests.Remove( unit.Position );
+		return dests.ToList();
 	}
 
 	bool HasLineOfSight( GridPos from, GridPos to )
@@ -1303,6 +1429,11 @@ public sealed class RogueChessGameComponent : Component
 		return true;
 	}
 
+	// Minimax ("Normal" difficulty) configuration + in-engine per-turn decision timing.
+	public const int MinimaxPlies = 6;
+	public double LastAiDecisionMs { get; private set; }
+	public double WorstAiDecisionMs { get; private set; }
+
 	void RunAiTurn()
 	{
 		if ( !IsCurrentAiTurn() )
@@ -1314,8 +1445,26 @@ public sealed class RogueChessGameComponent : Component
 
 		try
 		{
-			TryAiPlayCard( team );
-			TryAiUnitAction( team );
+			if ( Difficulty == AiDifficulty.Normal )
+			{
+				// Smart AI: minimax + alpha-beta chooses and applies the full turn (attack/hold + reserve
+				// moves + delegated card plays). Timed so the cost is visible in-engine.
+				var sw = System.Diagnostics.Stopwatch.StartNew();
+				ChooseBestTurn( MinimaxPlies, team )();
+				sw.Stop();
+				LastAiDecisionMs = sw.Elapsed.TotalMilliseconds;
+				if ( LastAiDecisionMs > WorstAiDecisionMs )
+					WorstAiDecisionMs = LastAiDecisionMs;
+			}
+			else
+			{
+				TryAiPlayCard( team );      // card window before the move phase
+				AiAttackPhase( team );      // the single attack (an already-in-range unit that hasn't moved)
+				if ( !IsGameOver )
+					AiMovePhase( team );    // advance up to 3 different reserve/other units
+				if ( !IsGameOver )
+					TryAiPlayCard( team );  // card window after all actions
+			}
 		}
 		finally
 		{
@@ -1332,15 +1481,80 @@ public sealed class RogueChessGameComponent : Component
 
 	void TryAiPlayCard( RogueChessTeam team )
 	{
-		if ( CardPlayed )
+		if ( !CanPlayCard )
 			return;
 
 		if ( TryAiPlayReboot( team ) ) return;
+
+		// Defensive priority: when the Commander is under an immediate (Chebyshev) threat, shield or shove
+		// that threat BEFORE spending the window on offense (Focus).
+		if ( CommanderThreatened( team ) )
+		{
+			if ( TryAiPlayGuardCommander( team ) ) return;
+			if ( TryAiPlayPush( team ) ) return;
+		}
+
 		if ( TryAiPlayFocus( team ) ) return;
 		if ( TryAiPlayGuard( team ) ) return;
-		if ( TryAiPlayRepair( team ) ) return;
-		if ( TryAiBuildBuddy( team ) ) return;
+		// BuildBuddy/Repair are excluded from the hero card pool — no AI triggers for them.
 		TryAiPlaySprint( team );
+	}
+
+	// Heroes-correct threat test: some enemy has this team's Commander within its Chebyshev attack range.
+	bool CommanderThreatened( RogueChessTeam team )
+	{
+		var commander = GetCommander( team );
+		return commander is not null && units.Any( e => e.Team != team && e.AttackRange > 0
+			&& e.Position.ChebyshevDistance( commander.Position ) <= e.AttackRange );
+	}
+
+	// Guard the Commander directly when it's under an immediate threat (checked ahead of Focus).
+	bool TryAiPlayGuardCommander( RogueChessTeam team )
+	{
+		var commander = GetCommander( team );
+		if ( commander is null )
+			return false;
+
+		if ( AiPlayCard( team, CardType.Guard, commander.Position ) )
+		{
+			lastAiAction = $"{TeamName( team )} computer guarded its threatened Commander.";
+			return true;
+		}
+
+		return false;
+	}
+
+	// If an enemy currently threatens our Commander, shove it to a tile farther from the Commander
+	// using an adjacent friendly unit as the push source.
+	bool TryAiPlayPush( RogueChessTeam team )
+	{
+		var commander = GetCommander( team );
+		if ( commander is null )
+			return false;
+
+		var threats = units.Where( e => e.Team != team && e.AttackRange > 0
+			&& e.Position.ChebyshevDistance( commander.Position ) <= e.AttackRange ).ToList();
+
+		foreach ( var enemy in threats )
+		{
+			foreach ( var src in units.Where( u => u.Team == team && u.CanActThisTurn && u.Position.ManhattanDistance( enemy.Position ) == 1 ).ToList() )
+			{
+				if ( TryGetPushDestinationFromSource( src, enemy, out var dest )
+					&& dest.ChebyshevDistance( commander.Position ) > enemy.Position.ChebyshevDistance( commander.Position ) )
+				{
+					SelectedUnitId = src.Id; // Push resolves against the selected source unit
+					if ( AiPlayCard( team, CardType.Push, enemy.Position ) )
+					{
+						SelectedUnitId = -1;
+						lastAiAction = $"{TeamName( team )} computer pushed a threat off its Commander.";
+						return true;
+					}
+					SelectedUnitId = -1;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	// If a friendly unit is disabled this turn, spend Reboot to free the most valuable one
@@ -1367,7 +1581,7 @@ public sealed class RogueChessGameComponent : Component
 
 	bool AiPlayCard( RogueChessTeam team, CardType card, GridPos pos )
 	{
-		if ( CardPlayed )
+		if ( !CanPlayCard )
 			return false;
 
 		var hand = GetHand( team );
@@ -1498,14 +1712,15 @@ public sealed class RogueChessGameComponent : Component
 			&& HasLineOfSight( enemy.Position, unit.Position );
 	}
 
-	void TryAiUnitAction( RogueChessTeam team )
+	// Attack phase: the single attack per turn, taken by an already-in-range unit that has NOT moved
+	// this turn. Priority: enemy Commander, then a guaranteed kill, then any enemy in range.
+	void AiAttackPhase( RogueChessTeam team )
 	{
 		var enemyTeam = OtherTeam( team );
 		var enemyCommander = GetCommander( enemyTeam );
 		if ( enemyCommander is null )
 			return;
 
-		// Always go for the enemy Commander or a guaranteed kill first.
 		foreach ( var attacker in units.Where( unit => unit.Team == team ).ToList() )
 		{
 			if ( IsLegalAttack( attacker, enemyCommander ) )
@@ -1525,60 +1740,128 @@ public sealed class RogueChessGameComponent : Component
 			}
 		}
 
-		if ( TryAiDisableCommanderThreat( team, enemyTeam ) )
-			return;
-
-		if ( AiAttacksBeforeResources )
-		{
-			if ( TryAiAttackAnyEnemy( team, enemyTeam ) ) return;
-			if ( TryAiCollectResource( team, enemyCommander ) ) return;
-		}
-		else
-		{
-			if ( TryAiCollectResource( team, enemyCommander ) ) return;
-			if ( TryAiAttackAnyEnemy( team, enemyTeam ) ) return;
-		}
-
-		if ( TryAiDisableAnyEnemy( team, enemyTeam ) )
-			return;
-
-		var bestMove = units
-			.Where( unit => unit.Team == team )
-			.SelectMany( unit => GetAiProgressMoves( unit, enemyCommander.Position ).Select( pos => new { Unit = unit, Pos = pos, Distance = pos.ManhattanDistance( enemyCommander.Position ) } ) )
-			.OrderBy( move => move.Distance )
-			.FirstOrDefault();
-
-		if ( bestMove is not null )
-			MoveUnit( bestMove.Unit, bestMove.Pos );
+		TryAiAttackAnyEnemy( team, enemyTeam );
 	}
 
-	bool TryAiDisableCommanderThreat( RogueChessTeam team, RogueChessTeam enemyTeam )
+	// Move phase: advance up to MoveSlotsPerTurn DIFFERENT units, prioritizing those farthest from the
+	// enemy Commander (reserves not yet engaged) so the back rank actually moves up.
+	void AiMovePhase( RogueChessTeam team )
 	{
-		var commander = GetCommander( team );
-		if ( commander is null )
+		var enemyCommander = GetCommander( OtherTeam( team ) );
+		if ( enemyCommander is null )
+			return;
+
+		TryAiSprintIntoRange( team ); // close the last tile into attack range if Sprint enables it
+
+		while ( MovesUsedThisTurn < MoveSlotsPerTurn && !IsGameOver )
+		{
+			if ( !TryAiAdvanceOneUnit( team, enemyCommander.Position ) )
+				break;
+		}
+	}
+
+	// If a unit can't reach any enemy's attack tile this turn by a normal move but COULD with Sprint's
+	// +1 slide (it's exactly one tile short), play Sprint and move it into range this turn.
+	bool TryAiSprintIntoRange( RogueChessTeam team )
+	{
+		if ( !CanPlayCard || GetScrap( team ) < CardData.All[CardType.Sprint].Cost || !GetHand( team ).Contains( CardType.Sprint ) )
 			return false;
 
+		foreach ( var u in units.Where( x => x.Team == team && x.AttackRange > 0 && CanUnitMove( x ) ).ToList() )
+		{
+			// Already able to reach an in-range tile without Sprint? Then Sprint isn't the missing piece.
+			if ( GetLegalMoves( u ).Any( dest => EnemyWithin( dest, u.AttackRange, team ) ) )
+				continue;
+
+			u.SprintMoveBonus = 1;
+			var sprintDest = GetLegalMoves( u ).Cast<GridPos?>().FirstOrDefault( dest => EnemyWithin( dest.Value, u.AttackRange, team ) );
+			u.SprintMoveBonus = 0;
+			if ( sprintDest is null )
+				continue;
+
+			if ( AiPlayCard( team, CardType.Sprint, u.Position ) )
+			{
+				MoveUnit( u, sprintDest.Value ); // +1 slide now applied; lands within attack range for next turn
+				lastAiAction = $"{TeamName( team )} computer sprinted {u.Type} into attack range.";
+				return true;
+			}
+			return false;
+		}
+
+		return false;
+	}
+
+	bool EnemyWithin( GridPos from, int range, RogueChessTeam team )
+		=> units.Any( e => e.Team != team && from.ChebyshevDistance( e.Position ) <= range );
+
+	bool TryAiAdvanceOneUnit( RogueChessTeam team, GridPos enemyCommanderPos )
+	{
+		// For each eligible mover, find its best forward tile that is SAFE (no enemy can hit it there
+		// without the unit being able to hit back), plus its best forward tile ignoring safety.
+		var candidates = units
+			.Where( unit => unit.Team == team && CanUnitMove( unit ) )
+			.Select( unit =>
+			{
+				var progress = GetAiProgressMoves( unit, enemyCommanderPos )
+					.OrderBy( pos => pos.ManhattanDistance( enemyCommanderPos ) )
+					.ToList();
+				return new
+				{
+					Unit = unit,
+					Safe = progress.Where( pos => IsSafeDestination( unit, pos ) ).Cast<GridPos?>().FirstOrDefault(),
+					Any = progress.Cast<GridPos?>().FirstOrDefault(),
+					Distance = unit.Position.ManhattanDistance( enemyCommanderPos )
+				};
+			} )
+			.Where( x => x.Any is not null )
+			.ToList();
+
+		// 1. Prefer a SAFE advance, farthest-from-front first (pull up un-engaged reserves).
+		var safe = candidates.Where( x => x.Safe is not null ).OrderByDescending( x => x.Distance ).FirstOrDefault();
+		if ( safe is not null )
+		{
+			MoveUnit( safe.Unit, safe.Safe.Value );
+			return true;
+		}
+
+		// 2. No safe advance exists. Don't freeze — but keep the Commander OUT of unanswerable range:
+		//    advance the farthest NON-Commander into its best (unsafe) tile instead.
+		var nonCmd = candidates.Where( x => x.Unit.Type != UnitType.Commander ).OrderByDescending( x => x.Distance ).FirstOrDefault();
+		if ( nonCmd is not null )
+		{
+			MoveUnit( nonCmd.Unit, nonCmd.Any.Value );
+			return true;
+		}
+
+		// 3. Only the Commander could advance, and only into danger -> hold it back rather than walk it
+		//    into a ranged threat it can't answer. Try a Hacker disable step instead.
+		var enemyTeam = OtherTeam( team );
 		foreach ( var hacker in units.Where( unit => unit.Team == team && unit.Type == UnitType.Hacker ).ToList() )
 		{
-			var threats = units.Where( unit => unit.Team == enemyTeam && IsUnitUnderThreatFrom( commander, unit ) );
-			if ( TryMoveHackerAdjacentTo( hacker, threats, commander.Position ) )
+			if ( TryMoveHackerAdjacentTo( hacker, units.Where( unit => unit.Team == enemyTeam ), enemyCommanderPos ) )
 				return true;
 		}
 
 		return false;
 	}
 
-	bool TryAiDisableAnyEnemy( RogueChessTeam team, RogueChessTeam enemyTeam )
+	// Single-turn positional safety: a destination is unsafe if some enemy can attack the unit there
+	// while the unit could NOT retaliate against that enemy from the same tile (e.g. a range-1 unit
+	// stepping into a range-3 Shooter's zone). No lookahead — just this-tile threat vs retaliation.
+	bool IsSafeDestination( UnitData unit, GridPos dest )
 	{
-		var preferNear = GetCommander( enemyTeam )?.Position ?? default;
-
-		foreach ( var hacker in units.Where( unit => unit.Team == team && unit.Type == UnitType.Hacker ).ToList() )
+		foreach ( var enemy in units.Where( u => u.Team != unit.Team ) )
 		{
-			if ( TryMoveHackerAdjacentTo( hacker, units.Where( unit => unit.Team == enemyTeam ), preferNear ) )
-				return true;
+			var enemyCanHit = enemy.AttackRange > 0 && enemy.Position.ChebyshevDistance( dest ) <= enemy.AttackRange;
+			if ( !enemyCanHit )
+				continue;
+
+			var canRetaliate = unit.AttackRange > 0 && dest.ChebyshevDistance( enemy.Position ) <= unit.AttackRange;
+			if ( !canRetaliate )
+				return false;
 		}
 
-		return false;
+		return true;
 	}
 
 	// Move a Hacker onto a legal tile adjacent to one of the given targets (its disable rider fires on the move).

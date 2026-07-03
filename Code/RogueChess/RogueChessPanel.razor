@@ -24,7 +24,7 @@
 						<div>CHESS</div>
 					</div>
 					<div class="builder-subtitle">Build Your Army</div>
-					<div class="builder-copy">Choose 7 units to join your Commander into battle.</div>
+					<div class="builder-copy">Choose 3 heroes to join your Commander into battle.</div>
 					@if ( !string.IsNullOrEmpty( BuilderNotice ) )
 					{
 						<div class="builder-notice">@BuilderNotice</div>
@@ -35,8 +35,7 @@
 						<div class="difficulty-title">Difficulty</div>
 						<div class="difficulty-buttons">
 							<div class="@GetDifficultyButtonClass( AiDifficulty.Beginner )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Beginner ) )>Beginner</div>
-							<div class="@GetDifficultyButtonClass( AiDifficulty.Intermediate )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Intermediate ) )>Intermediate</div>
-							<div class="@GetDifficultyButtonClass( AiDifficulty.Hard )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Hard ) )>Hard</div>
+							<div class="@GetDifficultyButtonClass( AiDifficulty.Normal )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Normal ) )>Normal</div>
 						</div>
 					</div>
 					<div class="builder-menu-button builder-bottom-button" onclick=@ShowHowToPlay>How To Play</div>
@@ -46,7 +45,7 @@
 					<div class="builder-panel">
 						<div class="builder-header">
 							<div class="builder-title">Your Army</div>
-							<div class="builder-count">@Game.BlueArmyFilledSlots/8</div>
+							<div class="builder-count">@Game.HeroCount/@Game.HeroPickTarget heroes</div>
 						</div>
 						<div class="army-builder-slots">
 							@for ( var slot = 0; slot < Game.BlueArmyChoices.Count; slot++ )
@@ -81,7 +80,7 @@
 
 						<div class="unit-pool-header">
 							<div class="unit-pool-title">Unit Pool</div>
-							<div class="unit-pool-copy">Select a unit card, then click an army slot.</div>
+							<div class="unit-pool-copy">Select a hero, then click an army slot. The rest fill with Buddies.</div>
 						</div>
 						<div class="unit-pool">
 							@foreach ( var unitType in Game.UnitPoolTypes )
@@ -126,8 +125,8 @@
 					<div class="details-card compact">
 						<div class="details-kicker">Army Rules</div>
 						<div class="builder-rule">Commander is locked.</div>
-						<div class="builder-rule">Choose exactly 7 additional units.</div>
-						<div class="builder-rule">Any combination of Buddy, Shooter, Tank, and Hacker is legal.</div>
+						<div class="builder-rule">Choose exactly 3 heroes.</div>
+						<div class="builder-rule">Any combination of Shooter, Tank, and Hacker is legal — the rest of your army is Buddies.</div>
 						<div class="builder-rule">Start Game unlocks at 8/8.</div>
 					</div>
 				</div>
@@ -154,7 +153,7 @@
 						<div class="intro-card-title">2. What to do on your turn</div>
 						<div class="intro-step">Click one of your units.</div>
 						<div class="intro-step">Then click a highlighted tile to move, or a highlighted enemy to attack.</div>
-						<div class="intro-step">You may also play one card from your hand before or after the unit action.</div>
+						<div class="intro-step">You may play one card before your moves/attack and one more after them — up to two cards per turn.</div>
 						<div class="intro-step">When you are done, click End Turn (or press Space or Tab).</div>
 						<div class="intro-step">The mode button can switch between Player vs Computer and Computer vs Computer.</div>
 					</div>
@@ -163,8 +162,9 @@
 				{
 					<div class="intro-panel">
 						<div class="intro-card-title">3. The most important rule</div>
-						<div class="intro-card-text">A unit can move OR attack on its turn. It cannot do both.</div>
-						<div class="intro-card-text">That means positioning matters. Sometimes moving to a better square is stronger than attacking right away.</div>
+						<div class="intro-card-text">Each turn you may move up to 3 different units (repositioning only) and make 1 attack.</div>
+						<div class="intro-card-text">A unit that moved this turn cannot also attack — the attack must come from a unit that stayed in place. No single unit moves and attacks in the same turn.</div>
+						<div class="intro-card-text">That means positioning matters. Units you move up this turn set up attacks for later turns.</div>
 						<div class="intro-card-text">Units move up, down, left, and right. They do not move diagonally.</div>
 					</div>
 				}
@@ -237,7 +237,7 @@
 				{
 					<div class="intro-panel first-move">
 						<div class="intro-card-title">7. Playing cards</div>
-						<div class="intro-card-text">You may play only 1 card each turn. Cards are optional and do not replace your unit action.</div>
+						<div class="intro-card-text">You may play one card before your actions and one after them — up to 2 per turn. Cards are optional and do not replace your unit moves or attack.</div>
 						<div class="intro-card-text">Click the selected card again or use Cancel Card if you change your mind.</div>
 						<div class="intro-card-text">Build Buddy creates a Buddy beside your Commander, but that Buddy acts next turn.</div>
 						<div class="intro-card-text">Try this first: click Blue Buddy or Blue Shooter, move toward a center Scrap tile, then click End Turn.</div>
@@ -278,6 +278,15 @@
 				<div class="turn @Game.CurrentTeam.ToString().ToLower()">@Game.TeamName( Game.CurrentTeam ) Turn</div>
 				<div class="mode">@ModeText</div>
 				<div class="instructions-button" onclick=@ShowHowToPlay>Instructions</div>
+			</div>
+
+			<div class="turn-actions">
+				<span class="ta-item ta-moves">Moves: @Game.MovesUsedThisTurn/@RogueChessGameComponent.MoveSlotsPerTurn used</span>
+				<span class="ta-item ta-attack @(Game.AttackAvailableThisTurn ? "avail" : "used")">Attack: @(Game.AttackAvailableThisTurn ? "available" : "used")</span>
+				@if ( !string.IsNullOrEmpty( Game.GetSelectedUnitEligibility() ) )
+				{
+					<span class="ta-item ta-elig">Selected: @Game.GetSelectedUnitEligibility()</span>
+				}
 			</div>
 
 			<div class="play-area">

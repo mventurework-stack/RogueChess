@@ -25,6 +25,14 @@ public enum UnitType
 	Hacker
 }
 
+// Which sliding directions a unit may move along.
+public enum MoveDirs
+{
+	Orthogonal,
+	Diagonal,
+	All
+}
+
 public enum CardType
 {
 	Guard,
@@ -46,11 +54,38 @@ public readonly record struct GridPos( int X, int Y )
 		new( 0, -1 )
 	};
 
+	public static readonly GridPos[] DiagonalDirections =
+	{
+		new( 1, 1 ),
+		new( 1, -1 ),
+		new( -1, 1 ),
+		new( -1, -1 )
+	};
+
+	public static readonly GridPos[] AllDirections =
+	{
+		new( 1, 0 ),
+		new( -1, 0 ),
+		new( 0, 1 ),
+		new( 0, -1 ),
+		new( 1, 1 ),
+		new( 1, -1 ),
+		new( -1, 1 ),
+		new( -1, -1 )
+	};
+
 	public bool IsInsideBoard => X >= 0 && X < RogueChessGameComponent.BoardSize && Y >= 0 && Y < RogueChessGameComponent.BoardSize;
 
 	public int ManhattanDistance( GridPos other )
 	{
 		return Math.Abs( X - other.X ) + Math.Abs( Y - other.Y );
+	}
+
+	// Chebyshev (chessboard) distance: max(|dx|,|dy|). Used for omnidirectional attack range so a
+	// diagonal tile at distance N counts as N, not 2N (which Manhattan would give).
+	public int ChebyshevDistance( GridPos other )
+	{
+		return Math.Max( Math.Abs( X - other.X ), Math.Abs( Y - other.Y ) );
 	}
 
 	public GridPos Offset( GridPos direction )
@@ -67,8 +102,9 @@ public sealed class UnitData
 	public GridPos Position { get; set; }
 	public int Health { get; set; }
 	public int MaxHealth { get; }
-	public int MoveRange { get; }
-	public int AttackRange { get; }
+	public int MoveRange { get; }        // sliding move distance
+	public int AttackRange { get; }      // attack distance (Chebyshev); 0 = cannot attack
+	public MoveDirs MoveDirs { get; }    // allowed sliding directions
 	public int Damage { get; }
 	public int Shield { get; set; }
 	public int FocusDamageBonus { get; set; }
@@ -86,42 +122,55 @@ public sealed class UnitData
 		Type = type;
 		Position = position;
 
+		// Heroes ruleset: directional sliding movement + Chebyshev omnidirectional attacks. Flat 1 damage.
 		switch ( type )
 		{
 			case UnitType.Commander:
-				MaxHealth = 9;
-				MoveRange = 1;
-				AttackRange = 1;
+				MaxHealth = 3;
+				MoveRange = 2;
+				MoveDirs = MoveDirs.All;
+				AttackRange = 3;
 				Damage = 1;
 				break;
 			case UnitType.Buddy:
-				MaxHealth = 6;
+				MaxHealth = 2;
 				MoveRange = 2;
+				MoveDirs = MoveDirs.All;
 				AttackRange = 1;
 				Damage = 1;
 				break;
 			case UnitType.Shooter:
-				MaxHealth = 5;
-				MoveRange = 1;
+				MaxHealth = 2;
+				MoveRange = 3; // Option A: diagonal slide up to 3. Option B (bent path) handled in movement gen.
+				MoveDirs = MoveDirs.Diagonal;
 				AttackRange = 3;
 				Damage = 1;
 				break;
 			case UnitType.Tank:
-				MaxHealth = 8;
-				MoveRange = 1;
-				AttackRange = 1;
+				MaxHealth = 3;
+				MoveRange = 2;
+				MoveDirs = MoveDirs.Orthogonal;
+				AttackRange = 2;
 				Damage = 1;
 				break;
 			case UnitType.Hacker:
-				MaxHealth = 2;
-				MoveRange = 2;
-				AttackRange = 1;
+				MaxHealth = 1;
+				MoveRange = 6;
+				MoveDirs = MoveDirs.All;
+				AttackRange = 0;
 				Damage = 1;
 				break;
 		}
 
 		Health = MaxHealth;
 	}
+
+	public GridPos[] MoveDirectionSet => MoveDirs switch
+	{
+		MoveDirs.Orthogonal => GridPos.CardinalDirections,
+		MoveDirs.Diagonal => GridPos.DiagonalDirections,
+		_ => GridPos.AllDirections
+	};
 
 	public int CurrentMoveRange => MoveRange + SprintMoveBonus;
 	public int CurrentDamage => Damage + FocusDamageBonus;
