@@ -338,6 +338,7 @@
 
 				<div class="center">
 					<div class="board-balance-spacer"></div>
+					<div class="debug-readout">@Game.DebugMoveInfo()</div>
 					<div class="board">
 						@for ( var y = 0; y < RogueChessGameComponent.BoardSize; y++ )
 						{
@@ -354,6 +355,7 @@
 									var deathSplatClass = Game.GetDeathSplatClass( tileX, tileY, "death-splat-effect" );
 									var deathSwirlClass = Game.GetDeathSplatClass( tileX, tileY, "death-swirl-effect" );
 									<div class="@Game.GetTileClass( tileX, tileY )" onclick=@( () => Game.ClickTile( tileX, tileY ) )>
+										<div class="debug-coord">@tileX,@tileY</div>
 										@if ( Game.IsResourceTile( tileX, tileY ) )
 										{
 											<div class="resource-mark">Scrap Tile</div>

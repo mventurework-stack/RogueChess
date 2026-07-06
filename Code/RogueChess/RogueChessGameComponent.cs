@@ -671,6 +671,21 @@ public sealed partial class RogueChessGameComponent : Component
 		return string.Join( " ", classes );
 	}
 
+	// TEMP DEBUG: reports the selected unit's actual GridPos and the GridPos of every tile that will
+	// be highlighted as a legal move, so an in-editor screenshot can be compared against the visual grid.
+	public string DebugMoveInfo()
+	{
+		var selected = GetSelectedUnit();
+		if ( selected is null )
+			return "DBG: no unit selected";
+
+		var moves = GetLegalMoves( selected )
+			.OrderBy( p => p.Y ).ThenBy( p => p.X )
+			.Select( p => $"({p.X},{p.Y})" );
+
+		return $"DBG sel={selected.ShortName}({selected.Position.X},{selected.Position.Y}) moves: {string.Join( " ", moves )}";
+	}
+
 	public string GetTileCueText( int x, int y )
 	{
 		var pos = new GridPos( x, y );
