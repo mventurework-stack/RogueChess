@@ -145,7 +145,7 @@ namespace StrategyGame
 			return list;
 		}
 
-		// Legal AttackActions via the Chebyshev range check already implemented in IsLegalAttack.
+		// Legal AttackActions via the range and line-of-sight check implemented in IsLegalAttack.
 		public List<GameAction> GenerateLegalAttackActions( RogueChessTeam team )
 		{
 			var list = new List<GameAction>();

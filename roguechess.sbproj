@@ -1,11 +1,11 @@
 {
-  "Title": "Rogue Chess",
+  "Title": "Rogue Chess Alpha",
   "Type": "game",
   "Org": "player2",
-  "Ident": "roguechess",
+  "Ident": "roguechessalpha",
   "Schema": 1,
   "IncludeSourceFiles": false,
-  "Resources": null,
+  "Resources": "ui/backgrounds/*\nui/cards/*\nui/pieces/*\n\n",
   "PackageReferences": [],
   "EditorReferences": null,
   "Mounts": null,
@@ -23,6 +23,7 @@
     "PerMapRanking": false,
     "LeaderboardType": "None",
     "CsProjName": "",
-    "StartupScene": "scenes/minimal.scene"
+    "StartupScene": "scenes/minimal.scene",
+    "LaunchMode": "Normal"
   }
 }

@@ -47,14 +47,13 @@ namespace StrategyGame
 				+ 0.15 * ( myHand - oppHand );
 		}
 
-		// Count enemy units that (from their current tile) have commanderTeam's Commander within attack range.
+		// Count enemy units that (from their current tile) have commanderTeam's Commander within attack range and sight.
 		int ThreatCountAgainst( RogueChessTeam commanderTeam )
 		{
 			var cmd = GetCommander( commanderTeam );
 			if ( cmd is null )
 				return 0;
-			return units.Count( e => e.Team != commanderTeam && e.AttackRange > 0
-				&& e.Position.ChebyshevDistance( cmd.Position ) <= e.AttackRange );
+			return units.Count( e => IsInAttackRangeWithLineOfSight( e, cmd ) );
 		}
 
 		// Turn-phase-agnostic mobility proxy for the "legal action count" term: sliding-move destinations
@@ -67,7 +66,7 @@ namespace StrategyGame
 				// Shared movement geometry (includes the Shooter's bent Option B), turn-phase agnostic.
 				count += ComputeSlidingDestinations( u ).Count;
 				if ( u.AttackRange > 0 )
-					count += units.Count( e => e.Team != team && u.Position.ChebyshevDistance( e.Position ) <= u.AttackRange );
+					count += units.Count( e => IsInAttackRangeWithLineOfSight( u, e ) );
 			}
 			return count;
 		}
@@ -217,9 +216,8 @@ namespace StrategyGame
 			int n = 0;
 			foreach ( var u in units.Where( x => x.Team == team && x.Type != UnitType.Hacker ) )
 			{
-				bool exposed = units.Any( e => e.Team != team && e.AttackRange > 0
-					&& e.Position.ChebyshevDistance( u.Position ) <= e.AttackRange
-					&& !( u.AttackRange > 0 && u.Position.ChebyshevDistance( e.Position ) <= u.AttackRange ) );
+				bool exposed = units.Any( e => IsInAttackRangeWithLineOfSight( e, u )
+					&& !IsInAttackRangeWithLineOfSight( u, e ) );
 				if ( exposed ) n++;
 			}
 			return n;

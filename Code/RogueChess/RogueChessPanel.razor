@@ -152,8 +152,9 @@
 					<div class="intro-panel">
 						<div class="intro-card-title">2. What to do on your turn</div>
 						<div class="intro-step">Click one of your units.</div>
-						<div class="intro-step">Then click a highlighted tile to move, or a highlighted enemy to attack.</div>
-						<div class="intro-step">You may play one card before your moves/attack and one more after them — up to two cards per turn.</div>
+						<div class="intro-step">Then click a highlighted tile to move, when you finish moving highlighted enemy to attack.</div>
+						<div class="intro-step">You can move up to 3 units and attack once.</div>
+						<div class="intro-step">You may play one card anytime on your turn.</div>
 						<div class="intro-step">When you are done, click End Turn (or press Space or Tab).</div>
 						<div class="intro-step">The mode button can switch between Player vs Computer and Computer vs Computer.</div>
 					</div>
@@ -165,7 +166,7 @@
 						<div class="intro-card-text">Each turn you may move up to 3 different units (repositioning only) and make 1 attack.</div>
 						<div class="intro-card-text">A unit that moved this turn cannot also attack — the attack must come from a unit that stayed in place. No single unit moves and attacks in the same turn.</div>
 						<div class="intro-card-text">That means positioning matters. Units you move up this turn set up attacks for later turns.</div>
-						<div class="intro-card-text">Units move up, down, left, and right. They do not move diagonally.</div>
+						<div class="intro-card-text">Movement and attack direction depend on the unit. The highlights show only legal moves and legal attacks.</div>
 					</div>
 				}
 				else if ( IntroPage == 3 )
@@ -191,21 +192,21 @@
 								<div class="instruction-unit-image shooter-blue"></div>
 								<div class="instruction-unit-copy">
 									<div class="instruction-unit-name">Shooter</div>
-									<div class="instruction-unit-text">A fragile ranged unit. Good for attacking from a distance, but easy to lose.</div>
+									<div class="instruction-unit-text">A fragile ranged unit. Shooter attacks diagonally from range and cannot shoot through units.</div>
 								</div>
 							</div>
 							<div class="instruction-unit-row">
 								<div class="instruction-unit-image tank-blue"></div>
 								<div class="instruction-unit-copy">
 									<div class="instruction-unit-name">Tank</div>
-									<div class="instruction-unit-text">A durable frontline unit. Good for holding territory and protecting allies.</div>
+									<div class="instruction-unit-text">A durable frontline unit. Tank attacks only in straight orthogonal lines: up, down, left, or right.</div>
 								</div>
 							</div>
 							<div class="instruction-unit-row">
 								<div class="instruction-unit-image hacker-blue"></div>
 								<div class="instruction-unit-copy">
 									<div class="instruction-unit-name">Hacker</div>
-									<div class="instruction-unit-text">A fragile control unit. It may disable an adjacent enemy instead of attacking.</div>
+									<div class="instruction-unit-text">A fragile control unit. Hacker does not make normal attacks; it disables adjacent enemies when it moves next to them.</div>
 								</div>
 							</div>
 						</div>
@@ -228,7 +229,7 @@
 						<div class="intro-card-text">Scrap is the resource used to play cards.</div>
 						<div class="intro-card-text">At the start of every turn, you gain 1 Scrap automatically.</div>
 						<div class="intro-card-text">The board has center squares labeled Scrap Tile. If one of your units is standing on a Scrap Tile when your turn starts, you gain +1 extra Scrap for that unit.</div>
-						<div class="intro-card-text">Units move at different speeds: Buddy and Commander slide up to 2 tiles, Shooter up to 3, and Hacker up to 6. Send a fast unit toward a Scrap Tile early.</div>
+						<div class="intro-card-text">Units move at different speeds and directions: Commander and Buddy slide up to 2 tiles, Tank up to 2 orthogonal tiles, Shooter up to 3 diagonal tiles, and Hacker up to 6 tiles. Send a fast unit toward a Scrap Tile early.</div>
 						<div class="intro-card-text">Cards are automatic. You draw 1 card every other turn, added to your hand at the start of that turn.</div>
 						<div class="intro-card-text">Your hand can hold 5 cards. If your hand is full, you do not draw another card.</div>
 					</div>
@@ -283,6 +284,7 @@
 			<div class="turn-actions">
 				<span class="ta-item ta-moves">Moves: @Game.MovesUsedThisTurn/@RogueChessGameComponent.MoveSlotsPerTurn used</span>
 				<span class="ta-item ta-attack @(Game.AttackAvailableThisTurn ? "avail" : "used")">Attack: @(Game.AttackAvailableThisTurn ? "available" : "used")</span>
+				<span class="ta-item ta-last-attack">Last attack: @Game.LastAttackStatus</span>
 				@if ( !string.IsNullOrEmpty( Game.GetSelectedUnitEligibility() ) )
 				{
 					<span class="ta-item ta-elig">Selected: @Game.GetSelectedUnitEligibility()</span>
@@ -405,7 +407,19 @@
 					</div>
 
 					<div class="status-row">
+						<div class="combat-log">
+							<div class="combat-log-title">Combat Status</div>
+							@if ( Game.CombatLog.Count == 0 )
+							{
+								<div class="combat-log-entry empty">No combat yet.</div>
+							}
+							else
+							{
+								<div class="combat-log-entry latest">@Game.CombatLog[0]</div>
+							}
+						</div>
 						<div class="status">
+							<div class="status-turn">@Game.TurnStatusText</div>
 							@if ( Game.Winner is not null )
 							{
 								<span>@Game.StatusMessage</span>

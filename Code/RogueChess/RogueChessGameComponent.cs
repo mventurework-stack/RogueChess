@@ -69,13 +69,13 @@ public sealed partial class RogueChessGameComponent : Component
 	static readonly UnitType[] DefaultArmyChoices =
 	{
 		UnitType.Buddy,
-		UnitType.Shooter,
+		UnitType.Buddy,
 		UnitType.Tank,
 		UnitType.Commander,
-		UnitType.Hacker,
+		UnitType.Buddy,
 		UnitType.Buddy,
 		UnitType.Shooter,
-		UnitType.Tank
+		UnitType.Hacker
 	};
 
 	static readonly GridPos[] BlueArmyPositions =
@@ -122,6 +122,7 @@ public sealed partial class RogueChessGameComponent : Component
 	public string WinReason { get; private set; }
 	public bool IsDraw { get; private set; }
 	public bool IsGameOver => Winner is not null || IsDraw;
+	public string TurnStatusText => IsGameOver ? "Game Over" : $"{TeamName( CurrentTeam )} Turn";
 	public int BlueScrap { get; private set; }
 	public int RedScrap { get; private set; }
 	// Separated move-phase turn structure:
@@ -184,11 +185,13 @@ public sealed partial class RogueChessGameComponent : Component
 	public UnitType SelectedArmyBuilderUnit { get; private set; } = UnitType.Shooter;
 	public int UiVersion { get; private set; }
 	public string StatusMessage { get; private set; } = "";
+	public string LastAttackStatus { get; private set; } = "none";
 	public int TurnNumber { get; private set; }
 
 	public IReadOnlyList<UnitData> Units => units;
 	public IReadOnlyList<CardType> BlueHand => blueHand;
 	public IReadOnlyList<CardType> RedHand => redHand;
+	public IReadOnlyList<string> CombatLog => combatLog;
 	public IReadOnlyList<UnitType?> BlueArmyChoices => blueArmyChoices;
 	public IReadOnlyList<UnitType?> RedArmyChoices => redArmyChoices;
 	// Returned from a property getter (not the static field) so the pool refreshes on hot-reload —
@@ -203,6 +206,7 @@ public sealed partial class RogueChessGameComponent : Component
 	readonly List<UnitData> units = new();
 	readonly List<CardType> blueHand = new();
 	readonly List<CardType> redHand = new();
+	readonly List<string> combatLog = new();
 	readonly List<UnitType?> blueArmyChoices = CreateEmptyArmyChoices();
 	readonly List<UnitType?> redArmyChoices = DefaultArmyChoices.Select( type => (UnitType?)type ).ToList();
 	readonly List<BoardEffect> boardEffects = new();
@@ -222,6 +226,7 @@ public sealed partial class RogueChessGameComponent : Component
 	float nextAiActionTime;
 	float nextBackgroundSoundRetryTime;
 	int turnsSinceLastAttack;
+	bool attackMessageShownThisTurn;
 	readonly Dictionary<int, GridPos> previousTileByUnit = new();
 	SoundEvent backgroundSoundEvent;
 	SoundHandle backgroundSoundHandle;
@@ -285,6 +290,7 @@ public sealed partial class RogueChessGameComponent : Component
 		units.Clear();
 		blueHand.Clear();
 		redHand.Clear();
+		combatLog.Clear();
 		boardEffects.Clear();
 		dyingUnitVisuals.Clear();
 
@@ -297,10 +303,16 @@ public sealed partial class RogueChessGameComponent : Component
 		RedScrap = 0;
 		Winner = null;
 		WinReason = null;
+		LastAttackStatus = "none";
 		TurnNumber = 0;
 		IsDraw = false;
 		turnsSinceLastAttack = 0;
 		previousTileByUnit.Clear();
+
+		// Red army choices can survive hot-reload/play-session changes because the list is created once.
+		// Reset it from DefaultArmyChoices before every match so the AI army always follows the current
+		// 3-hero / 4-Buddy / 1-Commander rule.
+		ResetRedArmyChoicesToDefault();
 
 		AddStartingArmy( RogueChessTeam.Blue );
 		AddStartingArmy( RogueChessTeam.Red );
@@ -314,11 +326,21 @@ public sealed partial class RogueChessGameComponent : Component
 		units.Clear();
 		blueHand.Clear();
 		redHand.Clear();
+		combatLog.Clear();
 		boardEffects.Clear();
 		dyingUnitVisuals.Clear();
 		ClearSelection();
+		ResetRedArmyChoicesToDefault();
+		LastAttackStatus = "none";
 		StatusMessage = $"Choose {HeroSlotCount} heroes to join your Commander.";
 		MarkDirty();
+	}
+
+
+	void ResetRedArmyChoicesToDefault()
+	{
+		redArmyChoices.Clear();
+		redArmyChoices.AddRange( DefaultArmyChoices.Select( type => (UnitType?)type ) );
 	}
 
 	void AddStartingArmy( RogueChessTeam team )
@@ -494,12 +516,13 @@ public sealed partial class RogueChessGameComponent : Component
 			return;
 
 		var pos = new GridPos( x, y );
+		var unit = GetUnitAt( pos );
 
 		if ( SelectedCardIndex >= 0 )
 		{
 			var hand = GetHand( CurrentTeam );
 			var selectedCard = SelectedCardIndex < hand.Count ? hand[SelectedCardIndex] : (CardType?)null;
-			var cardSource = GetUnitAt( pos );
+			var cardSource = unit;
 			if ( selectedCard == CardType.Push && cardSource is not null && cardSource.Team == CurrentTeam )
 			{
 				SelectedUnitId = cardSource.Id;
@@ -513,12 +536,12 @@ public sealed partial class RogueChessGameComponent : Component
 			if ( TryPlaySelectedCardAt( pos ) )
 				return;
 
-			StatusMessage = "That card cannot target this tile.";
-			MarkDirty();
-			return;
+			// If a card is selected and the player clicks a non-card target, do not trap the
+			// board in card targeting mode. Cancel the card and let the normal unit click
+			// logic below handle the same click when possible. This prevents the match from
+			// feeling frozen after an invalid card target.
+			SelectedCardIndex = -1;
 		}
-
-		var unit = GetUnitAt( pos );
 		if ( unit is not null && unit.Team == CurrentTeam )
 		{
 			SelectedUnitId = unit.Id;
@@ -876,6 +899,7 @@ public sealed partial class RogueChessGameComponent : Component
 		CurrentTeam = team;
 		MovesUsedThisTurn = 0;
 		AttackUsedThisTurn = false;
+		attackMessageShownThisTurn = false;
 		attackerUnitIdThisTurn = -1;
 		movedUnitIdsThisTurn.Clear();
 		CardPlayedBeforeAction = false;
@@ -922,7 +946,7 @@ public sealed partial class RogueChessGameComponent : Component
 		if ( ownTurns % 2 == 1 )
 			DrawCard( team );
 
-		StatusMessage = $"{TeamName( team )} starts turn and gains {scrapGain} Scrap.";
+		StatusMessage = $"{TeamName( team )} turn. Gained {scrapGain} Scrap.";
 		ScheduleAiIfNeeded();
 		MarkDirty();
 	}
@@ -1018,17 +1042,25 @@ public sealed partial class RogueChessGameComponent : Component
 			target.DisabledTurns = 1;
 			target.LastDisabledByUnitId = hacker.Id;
 			target.LastDisabledOnTurn = TurnNumber;
+
+			AppendCombatMessage( $"{FormatUnitAtPosition( hacker )} disabled {FormatUnitAtPosition( target )}." );
 		}
 	}
 
 	void AttackUnit( UnitData attacker, UnitData defender )
 	{
 		turnsSinceLastAttack = 0;
+		if ( !isSimulating )
+			LastAttackStatus = FormatAttackStatus( attacker, defender );
+
 		var damage = attacker.CurrentDamage;
 		var shieldAbsorb = Math.Min( defender.Shield, damage );
 		defender.Shield -= shieldAbsorb;
 		damage -= shieldAbsorb;
 		defender.Health -= damage;
+		var targetHp = Math.Max( defender.Health, 0 );
+
+		AppendCombatMessage( $"{FormatUnitAtPosition( attacker )} hit {FormatUnitAtPosition( defender )} for {damage} damage. {FormatUnitAtPosition( defender )} has {targetHp}/{defender.MaxHealth} HP.", true );
 
 		attacker.FocusDamageBonus = 0;
 		attacker.SprintMoveBonus = 0;
@@ -1044,10 +1076,12 @@ public sealed partial class RogueChessGameComponent : Component
 
 			if ( defender.Type == UnitType.Commander )
 			{
+				AppendCombatMessage( $"{FormatUnitAtPosition( defender )} destroyed. {TeamName( attacker.Team )} wins.", true );
 				SetWinner( attacker.Team, "knockout", $"{TeamName( attacker.Team )} wins! The enemy Commander is down." );
 			}
 			else
 			{
+				AppendCombatMessage( $"{FormatUnitAtPosition( attacker )} destroyed {FormatUnitAtPosition( defender )}.", true );
 				StatusMessage = $"{TeamName( attacker.Team )} {attacker.Type} defeated {defender.Type}.";
 			}
 
@@ -1069,6 +1103,31 @@ public sealed partial class RogueChessGameComponent : Component
 		}
 
 		MarkDirty();
+	}
+
+	string FormatAttackStatus( UnitData attacker, UnitData defender )
+	{
+		return $"{FormatUnitAtPosition( attacker )} attack {FormatUnitAtPosition( defender )}";
+	}
+
+	string FormatUnitAtPosition( UnitData unit )
+	{
+		return $"{TeamName( unit.Team )} {unit.Type}{FormatPos( unit.Position )}";
+	}
+
+	void AppendCombatMessage( string message, bool isAttackMessage = false )
+	{
+		if ( isSimulating )
+			return;
+
+		if ( attackMessageShownThisTurn && !isAttackMessage )
+			return;
+
+		if ( isAttackMessage )
+			attackMessageShownThisTurn = true;
+
+		combatLog.Clear();
+		combatLog.Add( message );
 	}
 
 	void AddHitEffect( GridPos pos )
@@ -1371,12 +1430,44 @@ public sealed partial class RogueChessGameComponent : Component
 
 	bool IsLegalAttack( UnitData attacker, UnitData defender )
 	{
-		// Omnidirectional Chebyshev-range attack, no line-of-sight blocking. AttackRange 0 = cannot attack.
 		// Still gated to a unit that did NOT move this turn (one attack per turn).
 		return CanUnitAttack( attacker )
-			&& attacker.AttackRange > 0
-			&& defender.Team != attacker.Team
-			&& attacker.Position.ChebyshevDistance( defender.Position ) <= attacker.AttackRange;
+			&& IsInAttackRangeWithLineOfSight( attacker, defender );
+	}
+
+	bool IsInAttackRangeWithLineOfSight( UnitData attacker, UnitData defender )
+	{
+		return defender.Team != attacker.Team
+			&& HasAttackPath( attacker, attacker.Position, defender.Position );
+	}
+
+	bool HasAttackPath( UnitData attacker, GridPos from, GridPos to )
+	{
+		if ( attacker.AttackRange <= 0 )
+			return false;
+
+		var deltaX = to.X - from.X;
+		var deltaY = to.Y - from.Y;
+		var absX = Math.Abs( deltaX );
+		var absY = Math.Abs( deltaY );
+		var distance = Math.Max( absX, absY );
+
+		if ( distance < 1 || distance > attacker.AttackRange )
+			return false;
+
+		if ( attacker.Type == UnitType.Tank )
+		{
+			var isOrthogonal = deltaX == 0 || deltaY == 0;
+			return isOrthogonal && HasLineOfSight( from, to );
+		}
+
+		if ( attacker.Type == UnitType.Shooter )
+		{
+			var isDiagonal = absX == absY;
+			return isDiagonal && HasLineOfSight( from, to );
+		}
+
+		return HasLineOfSight( from, to );
 	}
 
 	// Chess-style sliding movement, gated by turn eligibility. Delegates the tile geometry to
@@ -1441,23 +1532,33 @@ public sealed partial class RogueChessGameComponent : Component
 
 	bool HasLineOfSight( GridPos from, GridPos to )
 	{
-		var distance = from.ManhattanDistance( to );
+		var deltaX = to.X - from.X;
+		var deltaY = to.Y - from.Y;
+		var absX = Math.Abs( deltaX );
+		var absY = Math.Abs( deltaY );
+		var distance = Math.Max( absX, absY );
+
 		if ( distance <= 1 )
 			return true;
 
-		if ( from.X != to.X && from.Y != to.Y )
+		// Attacks may only trace along a real straight board line:
+		// horizontal, vertical, or exact diagonal. This is especially important for Shooters:
+		// a diagonal shot from (1,0) to (4,3) must check the blockers at (2,1) and (3,2).
+		var isStraightLine = deltaX == 0 || deltaY == 0 || absX == absY;
+		if ( !isStraightLine )
 			return false;
 
-		var stepX = Math.Sign( to.X - from.X );
-		var stepY = Math.Sign( to.Y - from.Y );
-		var current = from.Offset( new GridPos( stepX, stepY ) );
+		var step = new GridPos( Math.Sign( deltaX ), Math.Sign( deltaY ) );
+		var current = from.Offset( step );
 
-		while ( current != to )
+		// Every intermediate tile must be empty. The target tile is intentionally excluded here,
+		// because it is allowed to contain the enemy being attacked.
+		for ( var i = 1; i < distance; i++ )
 		{
 			if ( GetUnitAt( current ) is not null )
 				return false;
 
-			current = current.Offset( new GridPos( stepX, stepY ) );
+			current = current.Offset( step );
 		}
 
 		return true;
@@ -1538,8 +1639,7 @@ public sealed partial class RogueChessGameComponent : Component
 	bool CommanderThreatened( RogueChessTeam team )
 	{
 		var commander = GetCommander( team );
-		return commander is not null && units.Any( e => e.Team != team && e.AttackRange > 0
-			&& e.Position.ChebyshevDistance( commander.Position ) <= e.AttackRange );
+		return commander is not null && units.Any( e => IsInAttackRangeWithLineOfSight( e, commander ) );
 	}
 
 	// Guard the Commander directly when it's under an immediate threat (checked ahead of Focus).
@@ -1566,8 +1666,7 @@ public sealed partial class RogueChessGameComponent : Component
 		if ( commander is null )
 			return false;
 
-		var threats = units.Where( e => e.Team != team && e.AttackRange > 0
-			&& e.Position.ChebyshevDistance( commander.Position ) <= e.AttackRange ).ToList();
+		var threats = units.Where( e => IsInAttackRangeWithLineOfSight( e, commander ) ).ToList();
 
 		foreach ( var enemy in threats )
 		{
@@ -1742,8 +1841,7 @@ public sealed partial class RogueChessGameComponent : Component
 
 	bool IsUnitUnderThreatFrom( UnitData unit, UnitData enemy )
 	{
-		return enemy.Position.ManhattanDistance( unit.Position ) <= enemy.AttackRange
-			&& HasLineOfSight( enemy.Position, unit.Position );
+		return IsInAttackRangeWithLineOfSight( enemy, unit );
 	}
 
 	// Attack phase: the single attack per turn, taken by an already-in-range unit that has NOT moved
@@ -1804,11 +1902,11 @@ public sealed partial class RogueChessGameComponent : Component
 		foreach ( var u in units.Where( x => x.Team == team && x.AttackRange > 0 && CanUnitMove( x ) ).ToList() )
 		{
 			// Already able to reach an in-range tile without Sprint? Then Sprint isn't the missing piece.
-			if ( GetLegalMoves( u ).Any( dest => EnemyWithin( dest, u.AttackRange, team ) ) )
+			if ( GetLegalMoves( u ).Any( dest => EnemyWithin( u, dest, team ) ) )
 				continue;
 
 			u.SprintMoveBonus = 1;
-			var sprintDest = GetLegalMoves( u ).Cast<GridPos?>().FirstOrDefault( dest => EnemyWithin( dest.Value, u.AttackRange, team ) );
+			var sprintDest = GetLegalMoves( u ).Cast<GridPos?>().FirstOrDefault( dest => EnemyWithin( u, dest.Value, team ) );
 			u.SprintMoveBonus = 0;
 			if ( sprintDest is null )
 				continue;
@@ -1825,8 +1923,8 @@ public sealed partial class RogueChessGameComponent : Component
 		return false;
 	}
 
-	bool EnemyWithin( GridPos from, int range, RogueChessTeam team )
-		=> units.Any( e => e.Team != team && from.ChebyshevDistance( e.Position ) <= range );
+	bool EnemyWithin( UnitData attacker, GridPos from, RogueChessTeam team )
+		=> units.Any( e => e.Team != team && HasAttackPath( attacker, from, e.Position ) );
 
 	bool TryAiAdvanceOneUnit( RogueChessTeam team, GridPos enemyCommanderPos )
 	{
@@ -1886,11 +1984,13 @@ public sealed partial class RogueChessGameComponent : Component
 	{
 		foreach ( var enemy in units.Where( u => u.Team != unit.Team ) )
 		{
-			var enemyCanHit = enemy.AttackRange > 0 && enemy.Position.ChebyshevDistance( dest ) <= enemy.AttackRange;
+			var enemyCanHit = enemy.AttackRange > 0
+				&& HasAttackPath( enemy, enemy.Position, dest );
 			if ( !enemyCanHit )
 				continue;
 
-			var canRetaliate = unit.AttackRange > 0 && dest.ChebyshevDistance( enemy.Position ) <= unit.AttackRange;
+			var canRetaliate = unit.AttackRange > 0
+				&& HasAttackPath( unit, dest, enemy.Position );
 			if ( !canRetaliate )
 				return false;
 		}

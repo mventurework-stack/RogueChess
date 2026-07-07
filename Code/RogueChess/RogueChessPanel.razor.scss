@@ -744,6 +744,10 @@
 		color: #ffd35a;
 	}
 
+	.turn-actions .ta-last-attack {
+		color: #8fd0ff;
+	}
+
 	.brand {
 		font-size: 26px;
 		font-weight: 900;
@@ -1384,8 +1388,8 @@
 		z-index: 30;
 		font-size: 13px;
 		font-weight: 900;
-		color: #ff2bd6;
-		text-shadow: 0 0 2px #000, 0 1px 0 #000, 0 -1px 0 #000;
+		color: #000000;
+		text-shadow: 0 0 2px #ffffff, 0 1px 0 #ffffff, 0 -1px 0 #ffffff;
 		pointer-events: none;
 	}
 
@@ -1796,6 +1800,49 @@
 		flex-direction: column;
 	}
 
+	.combat-log {
+		width: 100%;
+		height: 274px;
+		flex-shrink: 0;
+		flex-direction: column;
+		gap: 7px;
+		padding: 10px;
+		border-radius: 8px;
+		background-color: rgba( 9, 18, 30, 0.96 );
+		border: 2px solid #8fd0ff;
+		box-shadow: 0 0 22px rgba( 66, 165, 255, 0.18 ), inset 0 0 0 1px rgba( 255, 255, 255, 0.05 );
+	}
+
+	.combat-log-title {
+		color: #8fd0ff;
+		font-size: 14px;
+		font-weight: 900;
+		text-transform: uppercase;
+	}
+
+	.combat-log-entry {
+		width: 100%;
+		min-height: 52px;
+		padding: 6px 8px;
+		border-radius: 6px;
+		background-color: #111922;
+		border: 1px solid #304456;
+		color: #d8e8ff;
+		font-size: 12px;
+		line-height: 15px;
+		font-weight: 800;
+	}
+
+	.combat-log-entry.latest {
+		background-color: rgba( 255, 211, 90, 0.16 );
+		border-color: #ffd35a;
+		color: #fff1a8;
+	}
+
+	.combat-log-entry.empty {
+		color: #8ea3b4;
+	}
+
 	.status {
 		flex-grow: 1;
 		align-items: center;
@@ -1807,6 +1854,14 @@
 		font-weight: 800;
 		line-height: 18px;
 		box-shadow: inset 0 0 0 1px rgba( 255, 255, 255, 0.04 );
+	}
+
+	.status-turn {
+		font-size: 20px;
+		font-weight: 900;
+		color: #ffd95a;
+		margin-bottom: 12px;
+		text-transform: uppercase;
 	}
 
 	.actions {

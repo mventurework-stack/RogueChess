@@ -103,7 +103,7 @@ public sealed class UnitData
 	public int Health { get; set; }
 	public int MaxHealth { get; }
 	public int MoveRange { get; }        // sliding move distance
-	public int AttackRange { get; }      // attack distance (Chebyshev); 0 = cannot attack
+	public int AttackRange { get; }      // maximum attack distance; 0 = cannot attack
 	public MoveDirs MoveDirs { get; }    // allowed sliding directions
 	public int Damage { get; }
 	public int Shield { get; set; }
@@ -122,7 +122,7 @@ public sealed class UnitData
 		Type = type;
 		Position = position;
 
-		// Heroes ruleset: directional sliding movement + Chebyshev omnidirectional attacks. Flat 1 damage.
+		// Heroes ruleset: directional sliding movement + per-unit attack geometry. Flat 1 damage.
 		switch ( type )
 		{
 			case UnitType.Commander:
