@@ -25,6 +25,8 @@
 					</div>
 					<div class="builder-subtitle">Build Your Army</div>
 					<div class="builder-copy">Choose 3 heroes to join your Commander into battle.</div>
+					<div class="online-status">@Game.OnlineStatusText</div>
+					<div class="online-roster">@Game.OnlineRosterText</div>
 					@if ( !string.IsNullOrEmpty( BuilderNotice ) )
 					{
 						<div class="builder-notice">@BuilderNotice</div>
@@ -278,6 +280,7 @@
 				<div class="brand">Rogue Chess V2</div>
 				<div class="turn @Game.CurrentTeam.ToString().ToLower()">@Game.TeamName( Game.CurrentTeam ) Turn</div>
 				<div class="mode">@ModeText</div>
+				<div class="online-status compact">@Game.OnlineStatusText</div>
 				<div class="instructions-button" onclick=@ShowHowToPlay>Instructions</div>
 			</div>
 
@@ -285,6 +288,7 @@
 				<span class="ta-item ta-moves">Moves: @Game.MovesUsedThisTurn/@RogueChessGameComponent.MoveSlotsPerTurn used</span>
 				<span class="ta-item ta-attack @(Game.AttackAvailableThisTurn ? "avail" : "used")">Attack: @(Game.AttackAvailableThisTurn ? "available" : "used")</span>
 				<span class="ta-item ta-last-attack">Last attack: @Game.LastAttackStatus</span>
+				<span class="ta-item ta-online">@Game.OnlineRosterText</span>
 				@if ( !string.IsNullOrEmpty( Game.GetSelectedUnitEligibility() ) )
 				{
 					<span class="ta-item ta-elig">Selected: @Game.GetSelectedUnitEligibility()</span>
@@ -340,7 +344,6 @@
 
 				<div class="center">
 					<div class="board-balance-spacer"></div>
-					<div class="debug-readout">@Game.DebugMoveInfo()</div>
 					<div class="board">
 						@for ( var y = 0; y < RogueChessGameComponent.BoardSize; y++ )
 						{
@@ -439,8 +442,11 @@
 								<div class="action-button" onclick=@Game.HandleTurnButton>@TurnButtonText</div>
 								<div class="action-button" onclick=@Game.RestartMatch>Restart Match</div>
 								<div class="mode-button-row">
-									<div class="@GetModeButtonClass( RogueChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsComputer ) )>PVE</div>
-									<div class="@GetModeButtonClass( RogueChessMode.ComputerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.ComputerVsComputer ) )>PVC</div>
+									<div class="mode-button-pair">
+										<div class="@GetModeButtonClass( RogueChessMode.PlayerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsComputer ) )>PVE</div>
+										<div class="@GetModeButtonClass( RogueChessMode.ComputerVsComputer )" onclick=@( () => Game.SetMode( RogueChessMode.ComputerVsComputer ) )>PVC</div>
+									</div>
+									<div class="@(GetModeButtonClass( RogueChessMode.PlayerVsPlayer ) + " pvp-mode-button")" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsPlayer ) )>Local PVP</div>
 								</div>
 								@if ( Game.SelectedCardIndex >= 0 )
 								{
@@ -662,6 +668,7 @@
 			&& Game.MatchStarted
 			&& !Game.IsGameOver
 			&& !Game.IsCurrentAiTurn()
+			&& Game.CanLocalPlayerActThisTurn
 			&& Game.Mode != RogueChessMode.ComputerVsComputer;
 	}
 

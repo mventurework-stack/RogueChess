@@ -187,6 +187,15 @@ public sealed partial class RogueChessGameComponent : Component
 	public string StatusMessage { get; private set; } = "";
 	public string LastAttackStatus { get; private set; } = "none";
 	public int TurnNumber { get; private set; }
+	[Sync] public bool OnlineSessionActive { get; private set; }
+	[Sync] public string OnlineBlueConnectionId { get; private set; } = "";
+	[Sync] public string OnlineRedConnectionId { get; private set; } = "";
+	[Sync] public string OnlineBlueDisplayName { get; private set; } = "";
+	[Sync] public string OnlineRedDisplayName { get; private set; } = "";
+	public RogueChessOnlineRole LocalOnlineRole => GetOnlineRole( Connection.Local );
+	public bool CanLocalPlayerActThisTurn => CanConnectionActForTeam( Connection.Local, CurrentTeam );
+	public string OnlineStatusText => GetOnlineStatusText();
+	public string OnlineRosterText => GetOnlineRosterText();
 
 	public IReadOnlyList<UnitData> Units => units;
 	public IReadOnlyList<CardType> BlueHand => blueHand;
@@ -279,12 +288,26 @@ public sealed partial class RogueChessGameComponent : Component
 
 	public void RestartMatch()
 	{
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestRestartMatch();
+			return;
+		}
+
+		RestartMatchForConnection( Connection.Local );
+	}
+
+	void RestartMatchForConnection( Connection caller )
+	{
 		if ( !IsBlueArmyComplete )
 		{
 			StatusMessage = $"Choose {HeroSlotCount} heroes to join your Commander before starting the match.";
 			MarkDirty();
 			return;
 		}
+
+		if ( RejectIfConnectionCannotConfigureBlueArmy( caller ) )
+			return;
 
 		MatchStarted = true;
 		units.Clear();
@@ -356,12 +379,32 @@ public sealed partial class RogueChessGameComponent : Component
 
 	public void StartMatchFromArmyBuilder()
 	{
-		RestartMatch();
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestStartMatchFromArmyBuilder();
+			return;
+		}
+
+		RestartMatchForConnection( Connection.Local );
 	}
 
 	public void SelectArmyBuilderUnit( UnitType unitType )
 	{
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestSelectArmyBuilderUnit( unitType );
+			return;
+		}
+
+		SelectArmyBuilderUnitForConnection( Connection.Local, unitType );
+	}
+
+	void SelectArmyBuilderUnitForConnection( Connection caller, UnitType unitType )
+	{
 		if ( unitType == UnitType.Commander )
+			return;
+
+		if ( RejectIfConnectionCannotConfigureBlueArmy( caller ) )
 			return;
 
 		SelectedArmyBuilderUnit = unitType;
@@ -371,7 +414,21 @@ public sealed partial class RogueChessGameComponent : Component
 
 	public void SetBlueArmySlot( int index )
 	{
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestSetBlueArmySlot( index );
+			return;
+		}
+
+		SetBlueArmySlotForConnection( Connection.Local, index );
+	}
+
+	void SetBlueArmySlotForConnection( Connection caller, int index )
+	{
 		if ( MatchStarted || index < 0 || index >= ArmySlotCount || index == CommanderArmySlotIndex )
+			return;
+
+		if ( RejectIfConnectionCannotConfigureBlueArmy( caller ) )
 			return;
 
 		var current = blueArmyChoices[index];
@@ -379,7 +436,7 @@ public sealed partial class RogueChessGameComponent : Component
 		// Clicking a slot that already holds the selected hero toggles it off.
 		if ( current == SelectedArmyBuilderUnit )
 		{
-			ClearBlueArmySlot( index );
+			ClearBlueArmySlotForConnection( caller, index );
 			return;
 		}
 
@@ -404,7 +461,21 @@ public sealed partial class RogueChessGameComponent : Component
 
 	public void ClearBlueArmySlot( int index )
 	{
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestClearBlueArmySlot( index );
+			return;
+		}
+
+		ClearBlueArmySlotForConnection( Connection.Local, index );
+	}
+
+	void ClearBlueArmySlotForConnection( Connection caller, int index )
+	{
 		if ( MatchStarted || index < 0 || index >= ArmySlotCount || index == CommanderArmySlotIndex || !blueArmyChoices[index].HasValue )
+			return;
+
+		if ( RejectIfConnectionCannotConfigureBlueArmy( caller ) )
 			return;
 
 		var removed = blueArmyChoices[index].Value;
@@ -482,13 +553,24 @@ public sealed partial class RogueChessGameComponent : Component
 
 	public void HandleTurnButton()
 	{
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestHandleTurnButton();
+			return;
+		}
+
+		HandleTurnButtonForConnection( Connection.Local );
+	}
+
+	void HandleTurnButtonForConnection( Connection caller )
+	{
 		if ( Mode == RogueChessMode.ComputerVsComputer )
 		{
 			StopPvcGame();
 			return;
 		}
 
-		EndTurn();
+		EndTurnForConnection( caller );
 	}
 
 	public void StopPvcGame()
@@ -504,7 +586,21 @@ public sealed partial class RogueChessGameComponent : Component
 
 	public void EndTurn()
 	{
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestEndTurn();
+			return;
+		}
+
+		EndTurnForConnection( Connection.Local );
+	}
+
+	void EndTurnForConnection( Connection caller )
+	{
 		if ( !MatchStarted || IsGameOver || IsCurrentAiTurn() )
+			return;
+
+		if ( RejectIfConnectionCannotActForTeam( caller, CurrentTeam ) )
 			return;
 
 		AdvanceTurn( true );
@@ -512,7 +608,21 @@ public sealed partial class RogueChessGameComponent : Component
 
 	public void ClickTile( int x, int y )
 	{
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestClickTile( x, y );
+			return;
+		}
+
+		ClickTileForConnection( Connection.Local, x, y );
+	}
+
+	void ClickTileForConnection( Connection caller, int x, int y )
+	{
 		if ( !MatchStarted || IsGameOver || IsCurrentAiTurn() )
+			return;
+
+		if ( RejectIfConnectionCannotActForTeam( caller, CurrentTeam ) )
 			return;
 
 		var pos = new GridPos( x, y );
@@ -587,7 +697,21 @@ public sealed partial class RogueChessGameComponent : Component
 
 	public void SelectCard( RogueChessTeam team, int index )
 	{
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestSelectCard( team, index );
+			return;
+		}
+
+		SelectCardForConnection( Connection.Local, team, index );
+	}
+
+	void SelectCardForConnection( Connection caller, RogueChessTeam team, int index )
+	{
 		if ( !MatchStarted || IsGameOver || IsCurrentAiTurn() )
+			return;
+
+		if ( RejectIfConnectionCannotActForTeam( caller, team ) )
 			return;
 
 		if ( team != CurrentTeam )
@@ -633,7 +757,21 @@ public sealed partial class RogueChessGameComponent : Component
 
 	public void CancelSelectedCard()
 	{
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestCancelSelectedCard();
+			return;
+		}
+
+		CancelSelectedCardForConnection( Connection.Local );
+	}
+
+	void CancelSelectedCardForConnection( Connection caller )
+	{
 		if ( SelectedCardIndex < 0 )
+			return;
+
+		if ( RejectIfConnectionCannotActForTeam( caller, CurrentTeam ) )
 			return;
 
 		SelectedCardIndex = -1;

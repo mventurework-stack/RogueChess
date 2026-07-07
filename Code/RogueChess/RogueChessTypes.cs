@@ -16,6 +16,14 @@ public enum RogueChessMode
 	ComputerVsComputer
 }
 
+public enum RogueChessOnlineRole
+{
+	Offline,
+	BluePlayer,
+	RedPlayer,
+	Spectator
+}
+
 public enum UnitType
 {
 	Commander,
