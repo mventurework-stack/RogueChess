@@ -20,7 +20,17 @@ public enum UnitType
 {
 	Commander,
 	Buddy,
-	Shooter
+	Shooter,
+	Tank,
+	Hacker
+}
+
+// Which sliding directions a unit may move along.
+public enum MoveDirs
+{
+	Orthogonal,
+	Diagonal,
+	All
 }
 
 public enum CardType
@@ -30,7 +40,8 @@ public enum CardType
 	Focus,
 	Sprint,
 	BuildBuddy,
-	Repair
+	Repair,
+	Reboot
 }
 
 public readonly record struct GridPos( int X, int Y )
@@ -43,11 +54,38 @@ public readonly record struct GridPos( int X, int Y )
 		new( 0, -1 )
 	};
 
+	public static readonly GridPos[] DiagonalDirections =
+	{
+		new( 1, 1 ),
+		new( 1, -1 ),
+		new( -1, 1 ),
+		new( -1, -1 )
+	};
+
+	public static readonly GridPos[] AllDirections =
+	{
+		new( 1, 0 ),
+		new( -1, 0 ),
+		new( 0, 1 ),
+		new( 0, -1 ),
+		new( 1, 1 ),
+		new( 1, -1 ),
+		new( -1, 1 ),
+		new( -1, -1 )
+	};
+
 	public bool IsInsideBoard => X >= 0 && X < RogueChessGameComponent.BoardSize && Y >= 0 && Y < RogueChessGameComponent.BoardSize;
 
 	public int ManhattanDistance( GridPos other )
 	{
 		return Math.Abs( X - other.X ) + Math.Abs( Y - other.Y );
+	}
+
+	// Chebyshev (chessboard) distance: max(|dx|,|dy|). Used for omnidirectional attack range so a
+	// diagonal tile at distance N counts as N, not 2N (which Manhattan would give).
+	public int ChebyshevDistance( GridPos other )
+	{
+		return Math.Max( Math.Abs( X - other.X ), Math.Abs( Y - other.Y ) );
 	}
 
 	public GridPos Offset( GridPos direction )
@@ -64,12 +102,17 @@ public sealed class UnitData
 	public GridPos Position { get; set; }
 	public int Health { get; set; }
 	public int MaxHealth { get; }
-	public int MoveRange { get; }
-	public int AttackRange { get; }
+	public int MoveRange { get; }        // sliding move distance
+	public int AttackRange { get; }      // attack distance (Chebyshev); 0 = cannot attack
+	public MoveDirs MoveDirs { get; }    // allowed sliding directions
 	public int Damage { get; }
 	public int Shield { get; set; }
 	public int FocusDamageBonus { get; set; }
 	public int SprintMoveBonus { get; set; }
+	public int DisabledTurns { get; set; }
+	public bool IsDisabledThisTurn { get; set; }
+	public int? LastDisabledByUnitId { get; set; }
+	public int LastDisabledOnTurn { get; set; } = -1;
 	public bool CanActThisTurn { get; set; } = true;
 
 	public UnitData( int id, RogueChessTeam team, UnitType type, GridPos position )
@@ -79,30 +122,55 @@ public sealed class UnitData
 		Type = type;
 		Position = position;
 
+		// Heroes ruleset: directional sliding movement + Chebyshev omnidirectional attacks. Flat 1 damage.
 		switch ( type )
 		{
 			case UnitType.Commander:
-				MaxHealth = 6;
-				MoveRange = 1;
-				AttackRange = 1;
+				MaxHealth = 3;
+				MoveRange = 2;
+				MoveDirs = MoveDirs.All;
+				AttackRange = 3;
 				Damage = 1;
 				break;
 			case UnitType.Buddy:
-				MaxHealth = 3;
+				MaxHealth = 2;
 				MoveRange = 2;
+				MoveDirs = MoveDirs.All;
 				AttackRange = 1;
 				Damage = 1;
 				break;
 			case UnitType.Shooter:
 				MaxHealth = 2;
-				MoveRange = 1;
+				MoveRange = 3; // Option A: diagonal slide up to 3. Option B (bent path) handled in movement gen.
+				MoveDirs = MoveDirs.Diagonal;
 				AttackRange = 3;
+				Damage = 1;
+				break;
+			case UnitType.Tank:
+				MaxHealth = 3;
+				MoveRange = 2;
+				MoveDirs = MoveDirs.Orthogonal;
+				AttackRange = 2;
+				Damage = 1;
+				break;
+			case UnitType.Hacker:
+				MaxHealth = 1;
+				MoveRange = 6;
+				MoveDirs = MoveDirs.All;
+				AttackRange = 0;
 				Damage = 1;
 				break;
 		}
 
 		Health = MaxHealth;
 	}
+
+	public GridPos[] MoveDirectionSet => MoveDirs switch
+	{
+		MoveDirs.Orthogonal => GridPos.CardinalDirections,
+		MoveDirs.Diagonal => GridPos.DiagonalDirections,
+		_ => GridPos.AllDirections
+	};
 
 	public int CurrentMoveRange => MoveRange + SprintMoveBonus;
 	public int CurrentDamage => Damage + FocusDamageBonus;
@@ -111,6 +179,8 @@ public sealed class UnitData
 		UnitType.Commander => "CMD",
 		UnitType.Buddy => "BUD",
 		UnitType.Shooter => "SHT",
+		UnitType.Tank => "TNK",
+		UnitType.Hacker => "HCK",
 		_ => "???"
 	};
 }
@@ -124,7 +194,8 @@ public readonly record struct CardData( CardType Type, string Name, int Cost, st
 		[CardType.Focus] = new( CardType.Focus, "Focus", 2, "Choose one friendly unit. Its next attack this turn deals +1 extra damage. Does not protect the unit." ),
 		[CardType.Sprint] = new( CardType.Sprint, "Sprint", 2, "Choose one friendly unit before it moves. It gets +1 move range this turn only. It still cannot attack after moving." ),
 		[CardType.BuildBuddy] = new( CardType.BuildBuddy, "Build Buddy", 3, "Choose an empty tile next to your Commander. Summon a Buddy there. The new Buddy can act next turn." ),
-		[CardType.Repair] = new( CardType.Repair, "Repair", 2, "Choose one damaged friendly unit. Restore 1 Health, up to its maximum Health. Does not add Shield." )
+		[CardType.Repair] = new( CardType.Repair, "Repair", 2, "Choose one damaged friendly unit. Restore 1 Health, up to its maximum Health. Does not add Shield." ),
+		[CardType.Reboot] = new( CardType.Reboot, "Reboot", 1, "Choose one disabled friendly unit. Immediately clear its disabled state so it can move and attack normally this turn." )
 	};
 
 	public static readonly IReadOnlyDictionary<CardType, CardVisualData> Visuals = new Dictionary<CardType, CardVisualData>
@@ -134,7 +205,8 @@ public readonly record struct CardData( CardType Type, string Name, int Cost, st
 		[CardType.Focus] = new( "Attack", "focus-art", "FOC", "One good hit, carefully planned.", "RARE" ),
 		[CardType.Sprint] = new( "Movement", "sprint-art", "RUN", "Little legs. Big plans.", "COMMON" ),
 		[CardType.BuildBuddy] = new( "Summon", "build-art", "BUD", "Backup has entered the board.", "RARE" ),
-		[CardType.Repair] = new( "Support", "repair-art", "FIX", "Duct tape, courage, and one more turn.", "COMMON" )
+		[CardType.Repair] = new( "Support", "repair-art", "FIX", "Duct tape, courage, and one more turn.", "COMMON" ),
+		[CardType.Reboot] = new( "Support", "reboot-art", "RBT", "Wakes a frozen friend right back up.", "COMMON" )
 	};
 }
 

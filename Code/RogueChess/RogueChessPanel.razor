@@ -14,10 +14,128 @@
 	}
 	else
 	{
-		@if ( ShowIntro )
+		@if ( ShowArmyBuilder )
+		{
+			<div class="army-builder-screen">
+				<div class="builder-left">
+					<div class="builder-logo-mark"></div>
+					<div class="builder-logo">
+						<div>ROGUE</div>
+						<div>CHESS</div>
+					</div>
+					<div class="builder-subtitle">Build Your Army</div>
+					<div class="builder-copy">Choose 3 heroes to join your Commander into battle.</div>
+					@if ( !string.IsNullOrEmpty( BuilderNotice ) )
+					{
+						<div class="builder-notice">@BuilderNotice</div>
+					}
+					<div class="@StartMatchButtonClass" onclick=@TryStartMatch>Start Game</div>
+					<div class="builder-menu-button" onclick=@ShowSettingsStatus>Settings</div>
+					<div class="difficulty-panel">
+						<div class="difficulty-title">Difficulty</div>
+						<div class="difficulty-buttons">
+							<div class="@GetDifficultyButtonClass( AiDifficulty.Beginner )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Beginner ) )>Beginner</div>
+							<div class="@GetDifficultyButtonClass( AiDifficulty.Normal )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Normal ) )>Normal</div>
+						</div>
+					</div>
+					<div class="builder-menu-button builder-bottom-button" onclick=@ShowHowToPlay>How To Play</div>
+				</div>
+
+				<div class="builder-center">
+					<div class="builder-panel">
+						<div class="builder-header">
+							<div class="builder-title">Your Army</div>
+							<div class="builder-count">@Game.HeroCount/@Game.HeroPickTarget heroes</div>
+						</div>
+						<div class="army-builder-slots">
+							@for ( var slot = 0; slot < Game.BlueArmyChoices.Count; slot++ )
+							{
+								var armySlot = slot;
+								var slotType = Game.BlueArmyChoices[armySlot];
+								var isCommanderSlot = armySlot == RogueChessGameComponent.CommanderArmySlotIndex;
+								if ( slotType.HasValue )
+								{
+									var unitType = slotType.Value;
+									<div class="@GetBuilderSlotClass( unitType, true, isCommanderSlot )" onclick=@( () => ClickArmyBuilderSlot( armySlot ) )>
+										<div class="slot-number">@(armySlot + 1)</div>
+										<div class="slot-unit-name">@unitType</div>
+										<div class="@GetBuilderPortraitClass( unitType )">
+											<div class="piece-art">
+												<div class="piece-label">@GetUnitShortName( unitType )</div>
+											</div>
+										</div>
+										<div class="slot-lock">@GetBuilderSlotActionText( armySlot, unitType )</div>
+									</div>
+								}
+								else
+								{
+									<div class="builder-slot empty" onclick=@( () => Game.SetBlueArmySlot( armySlot ) )>
+										<div class="slot-number">@(armySlot + 1)</div>
+										<div class="slot-plus">+</div>
+										<div class="slot-empty-text">Empty Slot</div>
+									</div>
+								}
+							}
+						</div>
+
+						<div class="unit-pool-header">
+							<div class="unit-pool-title">Unit Pool</div>
+							<div class="unit-pool-copy">Select a hero, then click an army slot. The rest fill with Buddies.</div>
+						</div>
+						<div class="unit-pool">
+							@foreach ( var unitType in Game.UnitPoolTypes )
+							{
+								var preview = Game.CreatePreviewUnit( unitType );
+								<div class="@GetBuilderUnitCardClass( unitType )" onclick=@( () => SelectBuilderUnit( unitType ) )>
+									<div class="unit-card-type">@unitType</div>
+									<div class="@GetBuilderPortraitClass( unitType )">
+										<div class="piece-art">
+											<div class="piece-label">@preview.ShortName</div>
+										</div>
+									</div>
+									<div class="unit-card-role">@Game.GetUnitRole( unitType )</div>
+									<div class="unit-card-stats">HP @preview.MaxHealth / MV @preview.MoveRange / RNG @preview.AttackRange / DMG @preview.Damage</div>
+								</div>
+							}
+						</div>
+					</div>
+				</div>
+
+				<div class="builder-right">
+					<div class="details-card">
+						@{
+							var details = Game.CreatePreviewUnit( BuilderDetailsUnit );
+						}
+						<div class="details-kicker">Selected Unit</div>
+						<div class="details-title">@BuilderDetailsUnit</div>
+						<div class="details-role">@Game.GetUnitRole( BuilderDetailsUnit )</div>
+						<div class="@GetBuilderPortraitClass( BuilderDetailsUnit )">
+							<div class="piece-art">
+								<div class="piece-label">@details.ShortName</div>
+							</div>
+						</div>
+						<div class="details-stats">
+							<div>Health <span>@details.MaxHealth</span></div>
+							<div>Movement <span>@details.MoveRange</span></div>
+							<div>Attack Range <span>@details.AttackRange</span></div>
+							<div>Damage <span>@details.Damage</span></div>
+						</div>
+						<div class="details-note">@Game.GetUnitDescription( BuilderDetailsUnit )</div>
+					</div>
+					<div class="details-card compact">
+						<div class="details-kicker">Army Rules</div>
+						<div class="builder-rule">Commander is locked.</div>
+						<div class="builder-rule">Choose exactly 3 heroes.</div>
+						<div class="builder-rule">Any combination of Shooter, Tank, and Hacker is legal — the rest of your army is Buddies.</div>
+						<div class="builder-rule">Start Game unlocks at 8/8.</div>
+					</div>
+				</div>
+			</div>
+		}
+		else if ( ShowIntro )
 		{
 			<div class="intro-screen">
-				<div class="intro-title">Scrap Chess Buddies</div>
+				<div class="intro-title">Rogue Chess V2</div>
 				<div class="intro-page-label">Page @(IntroPage + 1) of @IntroPageCount</div>
 
 				@if ( IntroPage == 0 )
@@ -35,7 +153,7 @@
 						<div class="intro-card-title">2. What to do on your turn</div>
 						<div class="intro-step">Click one of your units.</div>
 						<div class="intro-step">Then click a highlighted tile to move, or a highlighted enemy to attack.</div>
-						<div class="intro-step">You may also play one card from your hand before or after the unit action.</div>
+						<div class="intro-step">You may play one card before your moves/attack and one more after them — up to two cards per turn.</div>
 						<div class="intro-step">When you are done, click End Turn (or press Space or Tab).</div>
 						<div class="intro-step">The mode button can switch between Player vs Computer and Computer vs Computer.</div>
 					</div>
@@ -44,8 +162,9 @@
 				{
 					<div class="intro-panel">
 						<div class="intro-card-title">3. The most important rule</div>
-						<div class="intro-card-text">A unit can move OR attack on its turn. It cannot do both.</div>
-						<div class="intro-card-text">That means positioning matters. Sometimes moving to a better square is stronger than attacking right away.</div>
+						<div class="intro-card-text">Each turn you may move up to 3 different units (repositioning only) and make 1 attack.</div>
+						<div class="intro-card-text">A unit that moved this turn cannot also attack — the attack must come from a unit that stayed in place. No single unit moves and attacks in the same turn.</div>
+						<div class="intro-card-text">That means positioning matters. Units you move up this turn set up attacks for later turns.</div>
 						<div class="intro-card-text">Units move up, down, left, and right. They do not move diagonally.</div>
 					</div>
 				}
@@ -65,7 +184,7 @@
 								<div class="instruction-unit-image buddy-blue"></div>
 								<div class="instruction-unit-copy">
 									<div class="instruction-unit-name">Buddy</div>
-									<div class="instruction-unit-text">A basic short-range unit. Good for blocking, collecting Scrap, and protecting the Commander.</div>
+									<div class="instruction-unit-text">A fast scout. Good for collecting Scrap, flanking, blocking, and pressuring Shooters.</div>
 								</div>
 							</div>
 							<div class="instruction-unit-row">
@@ -73,6 +192,20 @@
 								<div class="instruction-unit-copy">
 									<div class="instruction-unit-name">Shooter</div>
 									<div class="instruction-unit-text">A fragile ranged unit. Good for attacking from a distance, but easy to lose.</div>
+								</div>
+							</div>
+							<div class="instruction-unit-row">
+								<div class="instruction-unit-image tank-blue"></div>
+								<div class="instruction-unit-copy">
+									<div class="instruction-unit-name">Tank</div>
+									<div class="instruction-unit-text">A durable frontline unit. Good for holding territory and protecting allies.</div>
+								</div>
+							</div>
+							<div class="instruction-unit-row">
+								<div class="instruction-unit-image hacker-blue"></div>
+								<div class="instruction-unit-copy">
+									<div class="instruction-unit-name">Hacker</div>
+									<div class="instruction-unit-text">A fragile control unit. It may disable an adjacent enemy instead of attacking.</div>
 								</div>
 							</div>
 						</div>
@@ -95,8 +228,8 @@
 						<div class="intro-card-text">Scrap is the resource used to play cards.</div>
 						<div class="intro-card-text">At the start of every turn, you gain 1 Scrap automatically.</div>
 						<div class="intro-card-text">The board has center squares labeled Scrap Tile. If one of your units is standing on a Scrap Tile when your turn starts, you gain +1 extra Scrap for that unit.</div>
-						<div class="intro-card-text">Buddy moves up to 2 tiles, while Commander and Shooter move 1. That is why Buddy is best at reaching Scrap Tiles early.</div>
-						<div class="intro-card-text">Cards are automatic. At the start of your turn, the game adds 1 card to your hand.</div>
+						<div class="intro-card-text">Units move at different speeds: Buddy and Commander slide up to 2 tiles, Shooter up to 3, and Hacker up to 6. Send a fast unit toward a Scrap Tile early.</div>
+						<div class="intro-card-text">Cards are automatic. You draw 1 card every other turn, added to your hand at the start of that turn.</div>
 						<div class="intro-card-text">Your hand can hold 5 cards. If your hand is full, you do not draw another card.</div>
 					</div>
 				}
@@ -104,9 +237,9 @@
 				{
 					<div class="intro-panel first-move">
 						<div class="intro-card-title">7. Playing cards</div>
-						<div class="intro-card-text">You may play only 1 card each turn. Cards are optional and do not replace your unit action.</div>
+						<div class="intro-card-text">You may play one card before your actions and one after them — up to 2 per turn. Cards are optional and do not replace your unit moves or attack.</div>
 						<div class="intro-card-text">Click the selected card again or use Cancel Card if you change your mind.</div>
-						<div class="intro-card-text">Build Buddy creates a Buddy beside your Commander, but that Buddy acts next turn.</div>
+						<div class="intro-card-text">For example, Guard gives one of your units +1 Shield until your next turn, blocking the next hit it takes.</div>
 						<div class="intro-card-text">Try this first: click Blue Buddy or Blue Shooter, move toward a center Scrap tile, then click End Turn.</div>
 					</div>
 				}
@@ -137,13 +270,23 @@
 			{
 				<div class="winner-overlay">
 					<div class="winner-banner @(Game.Winner.Value == RogueChessTeam.Blue ? "winner-blue" : "winner-red")">@Game.TeamName( Game.Winner.Value ) Wins!</div>
+					<div class="winner-reason">@WinnerReasonText</div>
 				</div>
 			}
 			<div class="topbar">
-				<div class="brand">Scrap Chess Buddies</div>
+				<div class="brand">Rogue Chess V2</div>
 				<div class="turn @Game.CurrentTeam.ToString().ToLower()">@Game.TeamName( Game.CurrentTeam ) Turn</div>
 				<div class="mode">@ModeText</div>
 				<div class="instructions-button" onclick=@ShowHowToPlay>Instructions</div>
+			</div>
+
+			<div class="turn-actions">
+				<span class="ta-item ta-moves">Moves: @Game.MovesUsedThisTurn/@RogueChessGameComponent.MoveSlotsPerTurn used</span>
+				<span class="ta-item ta-attack @(Game.AttackAvailableThisTurn ? "avail" : "used")">Attack: @(Game.AttackAvailableThisTurn ? "available" : "used")</span>
+				@if ( !string.IsNullOrEmpty( Game.GetSelectedUnitEligibility() ) )
+				{
+					<span class="ta-item ta-elig">Selected: @Game.GetSelectedUnitEligibility()</span>
+				}
 			</div>
 
 			<div class="play-area">
@@ -219,7 +362,8 @@
 										@if ( unit is not null )
 										{
 											<div class="piece-token image-token @GetPieceImageClass( unit )">
-												<div class="piece-art"></div>
+												<div class="piece-art">
+												</div>
 												<div class="piece-hp">
 													<span>@unit.Health/@unit.MaxHealth</span>
 													@if ( unit.Shield > 0 )
@@ -230,13 +374,15 @@
 											</div>
 											@if ( !unit.CanActThisTurn )
 											{
-												<div class="unit-wait">NEXT TURN</div>
+												<div class="unit-wait">@(unit.IsDisabledThisTurn ? "DISABLED" : "NEXT TURN")</div>
 											}
 										}
 										@if ( !string.IsNullOrEmpty( dyingUnitClass ) )
 										{
 											<div class="@dyingUnitClass">
-												<div class="piece-art"></div>
+												<div class="piece-art">
+													<div class="piece-label">KO</div>
+												</div>
 												<div class="@deathSplatClass"></div>
 												<div class="@deathSwirlClass"></div>
 											</div>
@@ -260,24 +406,13 @@
 						<div class="status">
 							@if ( Game.Winner is not null )
 							{
-								<span>@Game.TeamName( Game.Winner.Value ) wins. Restart to play again.</span>
+								<span>@Game.StatusMessage</span>
 							}
 							else
 							{
 								<span>@Game.StatusMessage</span>
 							}
 						</div>
-						@if ( Game.Winner is null && Game.Mode != RogueChessMode.ComputerVsComputer )
-						{
-							<div class="difficulty-panel">
-								<div class="difficulty-title">CPU Difficulty</div>
-								<div class="difficulty-buttons">
-									<div class="@GetDifficultyButtonClass( AiDifficulty.Beginner )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Beginner ) )>Beginner</div>
-									<div class="@GetDifficultyButtonClass( AiDifficulty.Intermediate )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Intermediate ) )>Intermediate</div>
-									<div class="@GetDifficultyButtonClass( AiDifficulty.Hard )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Hard ) )>Hard</div>
-								</div>
-							</div>
-						}
 						<div class="actions">
 							@if ( Game.Winner is not null )
 							{
@@ -358,10 +493,14 @@
 @code
 {
 	[Parameter] public RogueChessGameComponent Game { get; set; }
-	bool ShowIntro { get; set; } = true;
+	bool ShowArmyBuilder { get; set; } = true;
+	bool ShowIntro { get; set; }
+	UnitType BuilderDetailsUnit { get; set; } = UnitType.Commander;
+	string BuilderNotice { get; set; } = "";
 	int IntroPage { get; set; }
 	const int IntroPageCount = 7;
 	string IntroBackClass => IntroPage == 0 ? "nav-button disabled" : "nav-button";
+	string StartMatchButtonClass => Game?.IsBlueArmyComplete == true ? "builder-primary-button" : "builder-primary-button disabled";
 	string ModeText => Game?.Mode switch
 	{
 		RogueChessMode.PlayerVsComputer => "Player vs Computer: Blue human, Red CPU",
@@ -371,6 +510,107 @@
 	};
 
 	string TurnButtonText => Game?.Mode == RogueChessMode.ComputerVsComputer ? "Stop Game" : "End Turn [Space]";
+	string WinnerReasonText => Game?.WinReason switch
+	{
+		"elimination" => "Enemy army wiped out",
+		"knockout" => "Enemy Commander down",
+		_ => ""
+	};
+
+	void TryStartMatch()
+	{
+		if ( Game is null || !Game.IsBlueArmyComplete )
+		{
+			BuilderNotice = "Fill all 7 open army slots before starting.";
+			StateHasChanged();
+			return;
+		}
+
+		Game.StartMatchFromArmyBuilder();
+		if ( Game.MatchStarted )
+		{
+			ShowArmyBuilder = false;
+			ShowIntro = false;
+			BuilderNotice = "";
+		}
+
+		StateHasChanged();
+	}
+
+	void SelectBuilderUnit( UnitType unitType )
+	{
+		BuilderDetailsUnit = unitType;
+		Game?.SelectArmyBuilderUnit( unitType );
+		StateHasChanged();
+	}
+
+	void SetBuilderDetailsUnit( UnitType unitType )
+	{
+		BuilderDetailsUnit = unitType;
+		StateHasChanged();
+	}
+
+	void ClickArmyBuilderSlot( int armySlot )
+	{
+		if ( Game is null )
+			return;
+
+		var slotType = Game.BlueArmyChoices[armySlot];
+		if ( armySlot == RogueChessGameComponent.CommanderArmySlotIndex )
+		{
+			SetBuilderDetailsUnit( UnitType.Commander );
+			return;
+		}
+
+		if ( slotType.HasValue && slotType.Value == Game.SelectedArmyBuilderUnit )
+			Game.ClearBlueArmySlot( armySlot );
+		else
+			Game.SetBlueArmySlot( armySlot );
+
+		StateHasChanged();
+	}
+
+	void ShowSettingsStatus()
+	{
+		BuilderNotice = "Settings are not implemented yet.";
+		StateHasChanged();
+	}
+
+	string GetBuilderSlotClass( UnitType unitType, bool filled, bool locked = false )
+	{
+		var classes = new List<string> { "builder-slot", filled ? "filled" : "empty", unitType.ToString().ToLower() };
+		if ( locked )
+			classes.Add( "locked" );
+
+		return string.Join( " ", classes );
+	}
+
+	string GetBuilderSlotActionText( int armySlot, UnitType unitType )
+	{
+		if ( armySlot == RogueChessGameComponent.CommanderArmySlotIndex )
+			return "Locked";
+
+		return Game?.SelectedArmyBuilderUnit == unitType ? "Click to clear" : "Click to replace";
+	}
+
+	string GetBuilderUnitCardClass( UnitType unitType )
+	{
+		var classes = new List<string> { "unit-pool-card", unitType.ToString().ToLower() };
+		if ( Game?.SelectedArmyBuilderUnit == unitType )
+			classes.Add( "selected" );
+
+		return string.Join( " ", classes );
+	}
+
+	string GetBuilderPortraitClass( UnitType unitType )
+	{
+		return $"builder-portrait {unitType.ToString().ToLower()} {GetPieceImageClass( new UnitData( 0, RogueChessTeam.Blue, unitType, default ) )}";
+	}
+
+	string GetUnitShortName( UnitType unitType )
+	{
+		return Game?.CreatePreviewUnit( unitType ).ShortName ?? "";
+	}
 
 	public override void Tick()
 	{
@@ -401,7 +641,9 @@
 	bool CanEndTurnByKey()
 	{
 		return Game is not null
+			&& !ShowArmyBuilder
 			&& !ShowIntro
+			&& Game.MatchStarted
 			&& !Game.IsGameOver
 			&& !Game.IsCurrentAiTurn()
 			&& Game.Mode != RogueChessMode.ComputerVsComputer;
@@ -426,6 +668,8 @@
 				UnitType.Commander => "piece-commander-blue",
 				UnitType.Buddy => "piece-buddy-blue",
 				UnitType.Shooter => "piece-shooter-blue",
+				UnitType.Tank => "piece-tank-blue",
+				UnitType.Hacker => "piece-hacker-blue",
 				_ => ""
 			};
 		}
@@ -435,6 +679,8 @@
 			UnitType.Commander => "piece-commander-red",
 			UnitType.Buddy => "piece-buddy-red",
 			UnitType.Shooter => "piece-shooter-red",
+			UnitType.Tank => "piece-tank-red",
+			UnitType.Hacker => "piece-hacker-red",
 			_ => ""
 		};
 	}
@@ -451,6 +697,7 @@
 				CardType.Sprint => "card-image-sprint-blue",
 				CardType.BuildBuddy => "card-image-build-buddy-blue",
 				CardType.Repair => "card-image-repair-blue",
+				CardType.Reboot => "card-image-repair-blue", // placeholder art (no dedicated Reboot asset yet)
 				_ => ""
 			};
 		}
@@ -463,6 +710,7 @@
 			CardType.Sprint => "card-image-sprint-red",
 			CardType.BuildBuddy => "card-image-build-buddy-red",
 			CardType.Repair => "card-image-repair-red",
+			CardType.Reboot => "card-image-repair-red", // placeholder art (no dedicated Reboot asset yet)
 			_ => ""
 		};
 	}
@@ -470,11 +718,17 @@
 	void StartGame()
 	{
 		ShowIntro = false;
+		if ( Game?.MatchStarted == true )
+			ShowArmyBuilder = false;
+		else
+			ShowArmyBuilder = true;
+
 		StateHasChanged();
 	}
 
 	void ShowHowToPlay()
 	{
+		ShowArmyBuilder = false;
 		ShowIntro = true;
 		IntroPage = 0;
 		StateHasChanged();
@@ -498,6 +752,6 @@
 
 	protected override int BuildHash()
 	{
-		return HashCode.Combine( Game?.UiVersion ?? 0, ShowIntro, IntroPage );
+		return HashCode.Combine( Game?.UiVersion ?? 0, ShowArmyBuilder, ShowIntro, IntroPage, BuilderDetailsUnit, BuilderNotice );
 	}
 }
