@@ -16,6 +16,11 @@
 	{
 		@if ( ShowArmyBuilder )
 		{
+			var online = Game.OnlineSessionActive;
+			var builderTeam = Game.LocalBuilderTeam;
+			var isSpectator = online && builderTeam is null;
+			var team = builderTeam ?? RogueChessTeam.Blue;
+			var choices = team == RogueChessTeam.Blue ? Game.BlueArmyChoices : Game.RedArmyChoices;
 			<div class="army-builder-screen">
 				<div class="builder-left">
 					<div class="builder-logo-mark"></div>
@@ -27,6 +32,10 @@
 					<div class="builder-copy">Choose 3 heroes to join your Commander into battle.</div>
 					<div class="online-status">@Game.OnlineStatusText</div>
 					<div class="online-roster">@Game.OnlineRosterText</div>
+					@if ( online )
+					{
+						<div class="online-roster">@Game.GetArmyReadyStatusText()</div>
+					}
 					<div class="online-control-row">
 						<div class="@GetOnlineButtonClass( Game.CanHostOnlineGame )" onclick=@Game.HostOnlineGame>Host Online</div>
 						<div class="@GetOnlineButtonClass( Game.CanJoinOnlineGame )" onclick=@Game.JoinOnlineGame>Join Online</div>
@@ -36,76 +45,99 @@
 					{
 						<div class="builder-notice">@BuilderNotice</div>
 					}
-					<div class="@StartMatchButtonClass" onclick=@TryStartMatch>Start Game</div>
+					@if ( !isSpectator )
+					{
+						<div class="@GetStartButtonClass( team )" onclick=@TryStartMatch>@GetStartButtonText( team )</div>
+					}
+					else
+					{
+						<div class="builder-notice">The players are configuring their armies.</div>
+					}
 					<div class="builder-menu-button" onclick=@ShowSettingsStatus>Settings</div>
-					<div class="difficulty-panel">
-						<div class="difficulty-title">Difficulty</div>
-						<div class="difficulty-buttons">
-							<div class="@GetDifficultyButtonClass( AiDifficulty.Beginner )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Beginner ) )>Beginner</div>
-							<div class="@GetDifficultyButtonClass( AiDifficulty.Normal )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Normal ) )>Normal</div>
+					@if ( !online )
+					{
+						<div class="difficulty-panel">
+							<div class="difficulty-title">Difficulty</div>
+							<div class="difficulty-buttons">
+								<div class="@GetDifficultyButtonClass( AiDifficulty.Beginner )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Beginner ) )>Beginner</div>
+								<div class="@GetDifficultyButtonClass( AiDifficulty.Normal )" onclick=@( () => Game.SetDifficulty( AiDifficulty.Normal ) )>Normal</div>
+							</div>
 						</div>
-					</div>
+					}
 					<div class="builder-menu-button builder-bottom-button" onclick=@ShowHowToPlay>How To Play</div>
 				</div>
 
 				<div class="builder-center">
-					<div class="builder-panel">
-						<div class="builder-header">
-							<div class="builder-title">Your Army</div>
-							<div class="builder-count">@Game.HeroCount/@Game.HeroPickTarget heroes</div>
+					@if ( isSpectator )
+					{
+						<div class="builder-panel">
+							<div class="builder-header">
+								<div class="builder-title">Match Setup</div>
+							</div>
+							<div class="builder-copy">Both players are building their armies. The match begins once both are ready.</div>
+							<div class="online-roster">@Game.GetArmyReadyStatusText()</div>
 						</div>
-						<div class="army-builder-slots">
-							@for ( var slot = 0; slot < Game.BlueArmyChoices.Count; slot++ )
-							{
-								var armySlot = slot;
-								var slotType = Game.BlueArmyChoices[armySlot];
-								var isCommanderSlot = armySlot == RogueChessGameComponent.CommanderArmySlotIndex;
-								if ( slotType.HasValue )
+					}
+					else
+					{
+						<div class="builder-panel">
+							<div class="builder-header">
+								<div class="builder-title">@Game.GetArmyBuilderHeaderText()</div>
+								<div class="builder-count">@Game.HeroCountFor( team )/@Game.HeroPickTarget heroes</div>
+							</div>
+							<div class="army-builder-slots">
+								@for ( var slot = 0; slot < choices.Count; slot++ )
 								{
-									var unitType = slotType.Value;
-									<div class="@GetBuilderSlotClass( unitType, true, isCommanderSlot )" onclick=@( () => ClickArmyBuilderSlot( armySlot ) )>
-										<div class="slot-number">@(armySlot + 1)</div>
-										<div class="slot-unit-name">@unitType</div>
+									var armySlot = slot;
+									var slotType = choices[armySlot];
+									var isCommanderSlot = armySlot == RogueChessGameComponent.CommanderArmySlotIndex;
+									if ( slotType.HasValue )
+									{
+										var unitType = slotType.Value;
+										<div class="@GetBuilderSlotClass( unitType, true, isCommanderSlot )" onclick=@( () => ClickArmyBuilderSlot( team, armySlot ) )>
+											<div class="slot-number">@(armySlot + 1)</div>
+											<div class="slot-unit-name">@unitType</div>
+											<div class="@GetBuilderPortraitClass( unitType )">
+												<div class="piece-art">
+													<div class="piece-label">@GetUnitShortName( unitType )</div>
+												</div>
+											</div>
+											<div class="slot-lock">@GetBuilderSlotActionText( team, armySlot, unitType )</div>
+										</div>
+									}
+									else
+									{
+										<div class="builder-slot empty" onclick=@( () => ClickArmyBuilderSlot( team, armySlot ) )>
+											<div class="slot-number">@(armySlot + 1)</div>
+											<div class="slot-plus">+</div>
+											<div class="slot-empty-text">Empty Slot</div>
+										</div>
+									}
+								}
+							</div>
+
+							<div class="unit-pool-header">
+								<div class="unit-pool-title">Unit Pool</div>
+								<div class="unit-pool-copy">Select a hero, then click an army slot. The rest fill with Buddies.</div>
+							</div>
+							<div class="unit-pool">
+								@foreach ( var unitType in Game.UnitPoolTypes )
+								{
+									var preview = Game.CreatePreviewUnit( unitType );
+									<div class="@GetBuilderUnitCardClass( team, unitType )" onclick=@( () => SelectBuilderUnit( team, unitType ) )>
+										<div class="unit-card-type">@unitType</div>
 										<div class="@GetBuilderPortraitClass( unitType )">
 											<div class="piece-art">
-												<div class="piece-label">@GetUnitShortName( unitType )</div>
+												<div class="piece-label">@preview.ShortName</div>
 											</div>
 										</div>
-										<div class="slot-lock">@GetBuilderSlotActionText( armySlot, unitType )</div>
+										<div class="unit-card-role">@Game.GetUnitRole( unitType )</div>
+										<div class="unit-card-stats">HP @preview.MaxHealth / MV @preview.MoveRange / RNG @preview.AttackRange / DMG @preview.Damage</div>
 									</div>
 								}
-								else
-								{
-									<div class="builder-slot empty" onclick=@( () => Game.SetBlueArmySlot( armySlot ) )>
-										<div class="slot-number">@(armySlot + 1)</div>
-										<div class="slot-plus">+</div>
-										<div class="slot-empty-text">Empty Slot</div>
-									</div>
-								}
-							}
+							</div>
 						</div>
-
-						<div class="unit-pool-header">
-							<div class="unit-pool-title">Unit Pool</div>
-							<div class="unit-pool-copy">Select a hero, then click an army slot. The rest fill with Buddies.</div>
-						</div>
-						<div class="unit-pool">
-							@foreach ( var unitType in Game.UnitPoolTypes )
-							{
-								var preview = Game.CreatePreviewUnit( unitType );
-								<div class="@GetBuilderUnitCardClass( unitType )" onclick=@( () => SelectBuilderUnit( unitType ) )>
-									<div class="unit-card-type">@unitType</div>
-									<div class="@GetBuilderPortraitClass( unitType )">
-										<div class="piece-art">
-											<div class="piece-label">@preview.ShortName</div>
-										</div>
-									</div>
-									<div class="unit-card-role">@Game.GetUnitRole( unitType )</div>
-									<div class="unit-card-stats">HP @preview.MaxHealth / MV @preview.MoveRange / RNG @preview.AttackRange / DMG @preview.Damage</div>
-								</div>
-							}
-						</div>
-					</div>
+					}
 				</div>
 
 				<div class="builder-right">
@@ -532,7 +564,7 @@
 	int IntroPage { get; set; }
 	const int IntroPageCount = 7;
 	string IntroBackClass => IntroPage == 0 ? "nav-button disabled" : "nav-button";
-	string StartMatchButtonClass => Game?.IsBlueArmyComplete == true ? "builder-primary-button" : "builder-primary-button disabled";
+	bool lastMatchStarted;
 	string ModeText => Game?.Mode switch
 	{
 		RogueChessMode.PlayerVsComputer => "Player vs Computer: Blue human, Red CPU",
@@ -551,7 +583,35 @@
 
 	void TryStartMatch()
 	{
-		if ( Game is null || !Game.IsBlueArmyComplete )
+		if ( Game is null )
+			return;
+
+		if ( Game.OnlineSessionActive )
+		{
+			var builderTeam = Game.LocalBuilderTeam;
+			if ( builderTeam is null )
+			{
+				BuilderNotice = "Spectators cannot start the match.";
+				StateHasChanged();
+				return;
+			}
+
+			if ( !Game.IsArmyComplete( builderTeam.Value ) )
+			{
+				BuilderNotice = "Fill all 7 open army slots before readying up.";
+				StateHasChanged();
+				return;
+			}
+
+			// Online: this marks our side ready; the host begins the match once both sides are ready.
+			// The builder screen is dismissed by the MatchStarted transition handled in Tick().
+			Game.StartMatchFromArmyBuilder();
+			BuilderNotice = "";
+			StateHasChanged();
+			return;
+		}
+
+		if ( !Game.IsBlueArmyComplete )
 		{
 			BuilderNotice = "Fill all 7 open army slots before starting.";
 			StateHasChanged();
@@ -569,10 +629,25 @@
 		StateHasChanged();
 	}
 
-	void SelectBuilderUnit( UnitType unitType )
+	string GetStartButtonText( RogueChessTeam team )
+	{
+		if ( Game?.OnlineSessionActive != true )
+			return "Start Game";
+
+		var ready = team == RogueChessTeam.Blue ? Game.BlueArmyReady : Game.RedArmyReady;
+		return ready ? "Waiting..." : "Ready Up";
+	}
+
+	string GetStartButtonClass( RogueChessTeam team )
+	{
+		var complete = Game?.IsArmyComplete( team ) == true;
+		return complete ? "builder-primary-button" : "builder-primary-button disabled";
+	}
+
+	void SelectBuilderUnit( RogueChessTeam team, UnitType unitType )
 	{
 		BuilderDetailsUnit = unitType;
-		Game?.SelectArmyBuilderUnit( unitType );
+		Game?.SelectArmyBuilderUnit( team, unitType );
 		StateHasChanged();
 	}
 
@@ -582,22 +657,23 @@
 		StateHasChanged();
 	}
 
-	void ClickArmyBuilderSlot( int armySlot )
+	void ClickArmyBuilderSlot( RogueChessTeam team, int armySlot )
 	{
 		if ( Game is null )
 			return;
 
-		var slotType = Game.BlueArmyChoices[armySlot];
 		if ( armySlot == RogueChessGameComponent.CommanderArmySlotIndex )
 		{
 			SetBuilderDetailsUnit( UnitType.Commander );
 			return;
 		}
 
-		if ( slotType.HasValue && slotType.Value == Game.SelectedArmyBuilderUnit )
-			Game.ClearBlueArmySlot( armySlot );
+		var choices = team == RogueChessTeam.Blue ? Game.BlueArmyChoices : Game.RedArmyChoices;
+		var slotType = choices[armySlot];
+		if ( slotType.HasValue && slotType.Value == Game.GetSelectedArmyBuilderUnit( team ) )
+			Game.ClearArmySlot( team, armySlot );
 		else
-			Game.SetBlueArmySlot( armySlot );
+			Game.SetArmySlot( team, armySlot );
 
 		StateHasChanged();
 	}
@@ -617,18 +693,18 @@
 		return string.Join( " ", classes );
 	}
 
-	string GetBuilderSlotActionText( int armySlot, UnitType unitType )
+	string GetBuilderSlotActionText( RogueChessTeam team, int armySlot, UnitType unitType )
 	{
 		if ( armySlot == RogueChessGameComponent.CommanderArmySlotIndex )
 			return "Locked";
 
-		return Game?.SelectedArmyBuilderUnit == unitType ? "Click to clear" : "Click to replace";
+		return Game?.GetSelectedArmyBuilderUnit( team ) == unitType ? "Click to clear" : "Click to replace";
 	}
 
-	string GetBuilderUnitCardClass( UnitType unitType )
+	string GetBuilderUnitCardClass( RogueChessTeam team, UnitType unitType )
 	{
 		var classes = new List<string> { "unit-pool-card", unitType.ToString().ToLower() };
-		if ( Game?.SelectedArmyBuilderUnit == unitType )
+		if ( Game?.GetSelectedArmyBuilderUnit( team ) == unitType )
 			classes.Add( "selected" );
 
 		return string.Join( " ", classes );
@@ -654,6 +730,26 @@
 		{
 			AcceptsFocus = true;
 			Focus();
+		}
+
+		// Keep the builder/game screens in sync with the authoritative match state. In online play the host
+		// flips MatchStarted for everyone via NetState, so a client must follow it into and out of the match
+		// (e.g. leave the builder when both sides ready up, or return to it after an online restart).
+		var matchStarted = Game?.MatchStarted ?? false;
+		if ( matchStarted != lastMatchStarted )
+		{
+			lastMatchStarted = matchStarted;
+			if ( matchStarted )
+			{
+				ShowArmyBuilder = false;
+				ShowIntro = false;
+			}
+			else
+			{
+				ShowArmyBuilder = true;
+			}
+
+			StateHasChanged();
 		}
 	}
 

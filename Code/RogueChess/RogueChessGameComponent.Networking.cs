@@ -29,6 +29,7 @@ public sealed partial class RogueChessGameComponent : Component.INetworkListener
 
 		Mode = RogueChessMode.PlayerVsPlayer;
 		OnlineSessionActive = true;
+		InitializeOnlineArmies();
 		Networking.ServerName = RogueChessOnlineName;
 		Networking.SetData( "roguechess_version", "v3-phase-2" );
 		Networking.CreateLobby( new LobbyConfig
@@ -210,17 +211,27 @@ public sealed partial class RogueChessGameComponent : Component.INetworkListener
 		};
 	}
 
-	bool CanConnectionConfigureBlueArmy( Connection connection )
+	// Offline: any local action may configure the army (the single-army flow edits Blue). Online: a connection
+	// may only touch its own team's army; spectators are rejected for both teams.
+	bool CanConnectionConfigureArmy( Connection connection, RogueChessTeam team )
 	{
-		return !OnlineSessionActive || GetOnlineRole( connection ) == RogueChessOnlineRole.BluePlayer;
+		if ( !OnlineSessionActive )
+			return true;
+
+		return GetOnlineRole( connection ) switch
+		{
+			RogueChessOnlineRole.BluePlayer => team == RogueChessTeam.Blue,
+			RogueChessOnlineRole.RedPlayer => team == RogueChessTeam.Red,
+			_ => false
+		};
 	}
 
-	bool RejectIfConnectionCannotConfigureBlueArmy( Connection connection )
+	bool RejectIfConnectionCannotConfigureArmy( Connection connection, RogueChessTeam team )
 	{
-		if ( CanConnectionConfigureBlueArmy( connection ) )
+		if ( CanConnectionConfigureArmy( connection, team ) )
 			return false;
 
-		StatusMessage = "Only the Blue Player can configure the online army.";
+		StatusMessage = $"You can only configure your own team's army ({TeamName( team )} is not yours).";
 		MarkDirty();
 		return true;
 	}
@@ -265,6 +276,31 @@ public sealed partial class RogueChessGameComponent : Component.INetworkListener
 		return $"Blue: {blueName} | Red: {redName}";
 	}
 
+	// Army-builder header: names the team the local player is configuring (or a read-only spectator label).
+	public string GetArmyBuilderHeaderText()
+	{
+		if ( !OnlineSessionActive )
+			return "Your Army";
+
+		return LocalOnlineRole switch
+		{
+			RogueChessOnlineRole.BluePlayer => "Your Army — Blue",
+			RogueChessOnlineRole.RedPlayer => "Your Army — Red",
+			_ => "Match Setup (Spectating)"
+		};
+	}
+
+	// Per-team ready status shown in the online builder so each player can see the opponent's progress.
+	public string GetArmyReadyStatusText()
+	{
+		if ( !OnlineSessionActive )
+			return "";
+
+		var blue = BlueArmyReady ? "Ready" : "Building";
+		var red = RedArmyReady ? "Ready" : "Building";
+		return $"Blue: {blue}  |  Red: {red}";
+	}
+
 	void EnsureNetworkedGameObject()
 	{
 		GameObject.NetworkMode = NetworkMode.Object;
@@ -292,8 +328,113 @@ public sealed partial class RogueChessGameComponent : Component.INetworkListener
 		OnlineRedConnectionId = "";
 		OnlineBlueDisplayName = "";
 		OnlineRedDisplayName = "";
+		BlueArmyReady = false;
+		RedArmyReady = false;
 		StatusMessage = message;
 		ClearSelection();
+		MarkDirty();
+	}
+
+	// --- Online per-team army building + ready-up ------------------------------------------------------
+
+	void InitializeOnlineArmies()
+	{
+		// Red starts empty so the Red player builds from scratch (offline Red is the AI preset). Blue keeps
+		// whatever the host was assembling in the offline builder.
+		ResetArmyChoicesToEmpty( RogueChessTeam.Red );
+		BlueArmyReady = false;
+		RedArmyReady = false;
+		selectedRedArmyBuilderUnit = UnitType.Shooter;
+	}
+
+	void ResetArmyChoicesToEmpty( RogueChessTeam team )
+	{
+		var choices = GetArmyChoices( team );
+		choices.Clear();
+		choices.AddRange( CreateEmptyArmyChoices() );
+	}
+
+	void SetArmyReady( RogueChessTeam team, bool ready )
+	{
+		if ( team == RogueChessTeam.Blue )
+			BlueArmyReady = ready;
+		else
+			RedArmyReady = ready;
+	}
+
+	// START GAME dispatcher. Offline redeploys immediately; online marks the caller's side ready and only
+	// begins the match once both sides are ready.
+	void HandleStartPressedForConnection( Connection caller )
+	{
+		if ( OnlineSessionActive )
+			ReadyUpForConnection( caller );
+		else
+			RestartMatchForConnection( caller );
+	}
+
+	void ReadyUpForConnection( Connection caller )
+	{
+		var role = GetOnlineRole( caller );
+		var team = role switch
+		{
+			RogueChessOnlineRole.BluePlayer => (RogueChessTeam?)RogueChessTeam.Blue,
+			RogueChessOnlineRole.RedPlayer => (RogueChessTeam?)RogueChessTeam.Red,
+			_ => null
+		};
+
+		if ( team is null )
+		{
+			StatusMessage = "Spectators cannot start the match.";
+			MarkDirty();
+			return;
+		}
+
+		if ( !IsArmyComplete( team.Value ) )
+		{
+			StatusMessage = $"{TeamName( team.Value )}: choose {HeroSlotCount} heroes to join your Commander before readying up.";
+			MarkDirty();
+			return;
+		}
+
+		SetArmyReady( team.Value, true );
+
+		if ( BlueArmyReady && RedArmyReady )
+		{
+			StatusMessage = "Both armies ready. Starting match.";
+			BeginMatch(); // both armies already built by their players; keep them as-is
+			return;
+		}
+
+		var otherTeam = OtherTeam( team.Value );
+		StatusMessage = $"{TeamName( team.Value )} is ready. Waiting for {TeamName( otherTeam )} to finish their army.";
+		MarkDirty();
+	}
+
+	void RestartOnlineForConnection( Connection caller )
+	{
+		var role = GetOnlineRole( caller );
+		if ( role != RogueChessOnlineRole.BluePlayer && role != RogueChessOnlineRole.RedPlayer )
+		{
+			StatusMessage = "Only a player can restart the match.";
+			MarkDirty();
+			return;
+		}
+
+		// Return both sides to army building for a fresh match.
+		MatchStarted = false;
+		Winner = null;
+		WinReason = null;
+		IsDraw = false;
+		units.Clear();
+		blueHand.Clear();
+		redHand.Clear();
+		combatLog.Clear();
+		ResetArmyChoicesToEmpty( RogueChessTeam.Blue );
+		ResetArmyChoicesToEmpty( RogueChessTeam.Red );
+		BlueArmyReady = false;
+		RedArmyReady = false;
+		ClearSelection();
+		StatusMessage = "Rebuilding armies. Both players pick again, then press Start Game.";
 		MarkDirty();
 	}
 
@@ -321,7 +462,7 @@ public sealed partial class RogueChessGameComponent : Component.INetworkListener
 	[Rpc.Host]
 	public void RequestStartMatchFromArmyBuilder()
 	{
-		RestartMatchForConnection( Rpc.Caller );
+		HandleStartPressedForConnection( Rpc.Caller );
 	}
 
 	[Rpc.Host]
@@ -331,21 +472,21 @@ public sealed partial class RogueChessGameComponent : Component.INetworkListener
 	}
 
 	[Rpc.Host]
-	public void RequestSelectArmyBuilderUnit( UnitType unitType )
+	public void RequestSelectArmyBuilderUnit( RogueChessTeam team, UnitType unitType )
 	{
-		SelectArmyBuilderUnitForConnection( Rpc.Caller, unitType );
+		SelectArmyBuilderUnitForConnection( Rpc.Caller, team, unitType );
 	}
 
 	[Rpc.Host]
-	public void RequestSetBlueArmySlot( int index )
+	public void RequestSetArmySlot( RogueChessTeam team, int index )
 	{
-		SetBlueArmySlotForConnection( Rpc.Caller, index );
+		SetArmySlotForConnection( Rpc.Caller, team, index );
 	}
 
 	[Rpc.Host]
-	public void RequestClearBlueArmySlot( int index )
+	public void RequestClearArmySlot( RogueChessTeam team, int index )
 	{
-		ClearBlueArmySlotForConnection( Rpc.Caller, index );
+		ClearArmySlotForConnection( Rpc.Caller, team, index );
 	}
 
 	[Rpc.Host]

@@ -182,7 +182,47 @@ public sealed partial class RogueChessGameComponent : Component
 	public int SelectedUnitId { get; private set; } = -1;
 	public int SelectedCardIndex { get; private set; } = -1;
 	public bool MatchStarted { get; private set; }
+	// Blue's builder selection doubles as the offline single-army selection. Red has its own so each
+	// online player can pick independently. Synced implicitly: edits round-trip through the host RPCs.
 	public UnitType SelectedArmyBuilderUnit { get; private set; } = UnitType.Shooter;
+	UnitType selectedRedArmyBuilderUnit = UnitType.Shooter;
+
+	public UnitType GetSelectedArmyBuilderUnit( RogueChessTeam team )
+	{
+		return team == RogueChessTeam.Blue ? SelectedArmyBuilderUnit : selectedRedArmyBuilderUnit;
+	}
+
+	void SetSelectedArmyBuilderUnit( RogueChessTeam team, UnitType unitType )
+	{
+		if ( team == RogueChessTeam.Blue )
+			SelectedArmyBuilderUnit = unitType;
+		else
+			selectedRedArmyBuilderUnit = unitType;
+	}
+
+	// Per-team "finished building, ready to start" flags. Only meaningful in an online session; both must be
+	// true before the host begins the match. Synced to clients via NetState (see NetSync).
+	public bool BlueArmyReady { get; private set; }
+	public bool RedArmyReady { get; private set; }
+
+	// The team the local player configures in the army builder: Blue offline, or the player's own online team.
+	// Spectators return null (read-only builder view).
+	public RogueChessTeam? LocalBuilderTeam
+	{
+		get
+		{
+			if ( !OnlineSessionActive )
+				return RogueChessTeam.Blue;
+
+			return LocalOnlineRole switch
+			{
+				RogueChessOnlineRole.BluePlayer => RogueChessTeam.Blue,
+				RogueChessOnlineRole.RedPlayer => RogueChessTeam.Red,
+				_ => null
+			};
+		}
+	}
+
 	public int UiVersion { get; private set; }
 	public string StatusMessage { get; private set; } = "";
 	public string LastAttackStatus { get; private set; } = "none";
@@ -206,10 +246,15 @@ public sealed partial class RogueChessGameComponent : Component
 	// Returned from a property getter (not the static field) so the pool refreshes on hot-reload —
 	// static field initializers don't re-run on hot-reload, which stranded the old Buddy-in-pool list.
 	public IReadOnlyList<UnitType> UnitPoolTypes => new[] { UnitType.Shooter, UnitType.Tank, UnitType.Hacker };
-	public int BlueArmyFilledSlots => blueArmyChoices.Count( type => type.HasValue );
-	public bool IsBlueArmyComplete => BlueArmyFilledSlots == ArmySlotCount;
+	public int ArmyFilledSlotsFor( RogueChessTeam team ) => GetArmyChoices( team ).Count( type => type.HasValue );
+	public bool IsArmyComplete( RogueChessTeam team ) => ArmyFilledSlotsFor( team ) == ArmySlotCount;
 	// Heroes = non-Commander, non-Buddy picks. The pick counter tracks this out of HeroSlotCount (3).
-	public int HeroCount => blueArmyChoices.Count( type => type is UnitType.Shooter or UnitType.Tank or UnitType.Hacker );
+	public int HeroCountFor( RogueChessTeam team ) => GetArmyChoices( team ).Count( type => type is UnitType.Shooter or UnitType.Tank or UnitType.Hacker );
+
+	// Blue-facing shorthands kept for the offline single-army builder UI.
+	public int BlueArmyFilledSlots => ArmyFilledSlotsFor( RogueChessTeam.Blue );
+	public bool IsBlueArmyComplete => IsArmyComplete( RogueChessTeam.Blue );
+	public int HeroCount => HeroCountFor( RogueChessTeam.Blue );
 	public int HeroPickTarget => HeroSlotCount;
 
 	readonly List<UnitData> units = new();
@@ -299,6 +344,14 @@ public sealed partial class RogueChessGameComponent : Component
 
 	void RestartMatchForConnection( Connection caller )
 	{
+		// Online restart re-opens army building for both players instead of instantly redeploying, so each
+		// side can rebuild and ready up again.
+		if ( OnlineSessionActive )
+		{
+			RestartOnlineForConnection( caller );
+			return;
+		}
+
 		if ( !IsBlueArmyComplete )
 		{
 			StatusMessage = $"Choose {HeroSlotCount} heroes to join your Commander before starting the match.";
@@ -306,10 +359,25 @@ public sealed partial class RogueChessGameComponent : Component
 			return;
 		}
 
-		if ( RejectIfConnectionCannotConfigureBlueArmy( caller ) )
+		if ( RejectIfConnectionCannotConfigureArmy( caller, RogueChessTeam.Blue ) )
 			return;
 
+		// Red army choices can survive hot-reload/play-session changes because the list is created once.
+		// Reset it from DefaultArmyChoices before every match so the AI army always follows the current
+		// 3-hero / 4-Buddy / 1-Commander rule.
+		ResetRedArmyChoicesToDefault();
+
+		BeginMatch();
+	}
+
+	// Shared match build used by both the offline start and the online both-ready start. Assumes the blue and
+	// red army choices are already finalized: offline resets Red to the AI preset first; online keeps each
+	// player's own built army.
+	void BeginMatch()
+	{
 		MatchStarted = true;
+		BlueArmyReady = false;
+		RedArmyReady = false;
 		units.Clear();
 		blueHand.Clear();
 		redHand.Clear();
@@ -332,11 +400,6 @@ public sealed partial class RogueChessGameComponent : Component
 		turnsSinceLastAttack = 0;
 		previousTileByUnit.Clear();
 
-		// Red army choices can survive hot-reload/play-session changes because the list is created once.
-		// Reset it from DefaultArmyChoices before every match so the AI army always follows the current
-		// 3-hero / 4-Buddy / 1-Commander rule.
-		ResetRedArmyChoicesToDefault();
-
 		AddStartingArmy( RogueChessTeam.Blue );
 		AddStartingArmy( RogueChessTeam.Red );
 
@@ -346,6 +409,8 @@ public sealed partial class RogueChessGameComponent : Component
 	void PrepareArmyBuilder()
 	{
 		MatchStarted = false;
+		BlueArmyReady = false;
+		RedArmyReady = false;
 		units.Clear();
 		blueHand.Clear();
 		redHand.Clear();
@@ -385,124 +450,137 @@ public sealed partial class RogueChessGameComponent : Component
 			return;
 		}
 
-		RestartMatchForConnection( Connection.Local );
+		HandleStartPressedForConnection( Connection.Local );
 	}
 
-	public void SelectArmyBuilderUnit( UnitType unitType )
-	{
-		if ( ShouldRouteUiActionsToHost )
-		{
-			RequestSelectArmyBuilderUnit( unitType );
-			return;
-		}
-
-		SelectArmyBuilderUnitForConnection( Connection.Local, unitType );
-	}
-
-	void SelectArmyBuilderUnitForConnection( Connection caller, UnitType unitType )
+	public void SelectArmyBuilderUnit( RogueChessTeam team, UnitType unitType )
 	{
 		if ( unitType == UnitType.Commander )
 			return;
 
-		if ( RejectIfConnectionCannotConfigureBlueArmy( caller ) )
-			return;
-
-		SelectedArmyBuilderUnit = unitType;
-		StatusMessage = $"{unitType} selected for army slots.";
-		MarkDirty();
-	}
-
-	public void SetBlueArmySlot( int index )
-	{
 		if ( ShouldRouteUiActionsToHost )
 		{
-			RequestSetBlueArmySlot( index );
+			// Update the local highlight immediately, then let the host apply the authoritative selection.
+			SetSelectedArmyBuilderUnit( team, unitType );
+			MarkDirty();
+			RequestSelectArmyBuilderUnit( team, unitType );
 			return;
 		}
 
-		SetBlueArmySlotForConnection( Connection.Local, index );
+		SelectArmyBuilderUnitForConnection( Connection.Local, team, unitType );
 	}
 
-	void SetBlueArmySlotForConnection( Connection caller, int index )
+	void SelectArmyBuilderUnitForConnection( Connection caller, RogueChessTeam team, UnitType unitType )
+	{
+		if ( unitType == UnitType.Commander )
+			return;
+
+		if ( RejectIfConnectionCannotConfigureArmy( caller, team ) )
+			return;
+
+		SetSelectedArmyBuilderUnit( team, unitType );
+		StatusMessage = $"{unitType} selected for {TeamName( team )} army slots.";
+		MarkDirty();
+	}
+
+	public void SetArmySlot( RogueChessTeam team, int index )
+	{
+		if ( ShouldRouteUiActionsToHost )
+		{
+			RequestSetArmySlot( team, index );
+			return;
+		}
+
+		SetArmySlotForConnection( Connection.Local, team, index );
+	}
+
+	void SetArmySlotForConnection( Connection caller, RogueChessTeam team, int index )
 	{
 		if ( MatchStarted || index < 0 || index >= ArmySlotCount || index == CommanderArmySlotIndex )
 			return;
 
-		if ( RejectIfConnectionCannotConfigureBlueArmy( caller ) )
+		if ( RejectIfConnectionCannotConfigureArmy( caller, team ) )
 			return;
 
-		var current = blueArmyChoices[index];
+		var choices = GetArmyChoices( team );
+		var selectedUnit = GetSelectedArmyBuilderUnit( team );
+		var current = choices[index];
 
 		// Clicking a slot that already holds the selected hero toggles it off.
-		if ( current == SelectedArmyBuilderUnit )
+		if ( current == selectedUnit )
 		{
-			ClearBlueArmySlotForConnection( caller, index );
+			ClearArmySlotForConnection( caller, team, index );
 			return;
 		}
 
 		// Only heroes are placed manually; Buddies are auto-filled. Cap at HeroSlotCount unless this
 		// click is swapping the hero already in this slot.
 		bool slotHasHero = current is UnitType.Shooter or UnitType.Tank or UnitType.Hacker;
-		if ( !slotHasHero && HeroCount >= HeroSlotCount )
+		if ( !slotHasHero && HeroCountFor( team ) >= HeroSlotCount )
 		{
-			StatusMessage = $"You already chose {HeroSlotCount} heroes. Remove one to change your picks.";
+			StatusMessage = $"{TeamName( team )} already chose {HeroSlotCount} heroes. Remove one to change picks.";
 			MarkDirty();
 			return;
 		}
 
-		blueArmyChoices[index] = SelectedArmyBuilderUnit;
-		NormalizeAutoBuddies();
+		choices[index] = selectedUnit;
+		NormalizeAutoBuddies( team );
+		// Changing the army invalidates a prior ready-up for that side.
+		SetArmyReady( team, false );
 
-		StatusMessage = HeroCount >= HeroSlotCount
-			? $"{HeroSlotCount} heroes chosen — remaining slots auto-filled with Buddies. Start Game unlocked."
-			: $"Hero placed ({HeroCount}/{HeroSlotCount}). Choose {HeroSlotCount - HeroCount} more.";
+		StatusMessage = HeroCountFor( team ) >= HeroSlotCount
+			? $"{TeamName( team )}: {HeroSlotCount} heroes chosen — remaining slots auto-filled with Buddies. Start Game unlocked."
+			: $"{TeamName( team )} hero placed ({HeroCountFor( team )}/{HeroSlotCount}). Choose {HeroSlotCount - HeroCountFor( team )} more.";
 		MarkDirty();
 	}
 
-	public void ClearBlueArmySlot( int index )
+	public void ClearArmySlot( RogueChessTeam team, int index )
 	{
 		if ( ShouldRouteUiActionsToHost )
 		{
-			RequestClearBlueArmySlot( index );
+			RequestClearArmySlot( team, index );
 			return;
 		}
 
-		ClearBlueArmySlotForConnection( Connection.Local, index );
+		ClearArmySlotForConnection( Connection.Local, team, index );
 	}
 
-	void ClearBlueArmySlotForConnection( Connection caller, int index )
+	void ClearArmySlotForConnection( Connection caller, RogueChessTeam team, int index )
 	{
-		if ( MatchStarted || index < 0 || index >= ArmySlotCount || index == CommanderArmySlotIndex || !blueArmyChoices[index].HasValue )
+		var choices = GetArmyChoices( team );
+		if ( MatchStarted || index < 0 || index >= ArmySlotCount || index == CommanderArmySlotIndex || !choices[index].HasValue )
 			return;
 
-		if ( RejectIfConnectionCannotConfigureBlueArmy( caller ) )
+		if ( RejectIfConnectionCannotConfigureArmy( caller, team ) )
 			return;
 
-		var removed = blueArmyChoices[index].Value;
+		var removed = choices[index].Value;
 		// Auto-filled Buddies aren't manually removable — only heroes are.
 		if ( removed == UnitType.Buddy )
 			return;
 
-		blueArmyChoices[index] = null;
-		NormalizeAutoBuddies(); // drops the auto-Buddies now that we're below HeroSlotCount
-		StatusMessage = $"Removed {removed}. Choose {HeroSlotCount - HeroCount} more hero(es).";
+		choices[index] = null;
+		NormalizeAutoBuddies( team ); // drops the auto-Buddies now that we're below HeroSlotCount
+		SetArmyReady( team, false );
+		StatusMessage = $"{TeamName( team )} removed {removed}. Choose {HeroSlotCount - HeroCountFor( team )} more hero(es).";
 		MarkDirty();
 	}
 
 	// Keep the auto-Buddy fill consistent: once all 3 heroes are placed, fill the remaining empty
 	// non-Commander slots with Buddy; otherwise clear any auto-Buddies so those slots reopen for picking.
-	void NormalizeAutoBuddies()
+	void NormalizeAutoBuddies( RogueChessTeam team )
 	{
-		bool full = HeroCount >= HeroSlotCount;
+		var choices = GetArmyChoices( team );
+		bool full = HeroCountFor( team ) >= HeroSlotCount;
 		for ( var i = 0; i < ArmySlotCount; i++ )
 		{
 			if ( i == CommanderArmySlotIndex )
 				continue;
 
-			if ( full && !blueArmyChoices[i].HasValue )
-				blueArmyChoices[i] = UnitType.Buddy;
-			else if ( !full && blueArmyChoices[i] == UnitType.Buddy )
-				blueArmyChoices[i] = null;
+			if ( full && !choices[i].HasValue )
+				choices[i] = UnitType.Buddy;
+			else if ( !full && choices[i] == UnitType.Buddy )
+				choices[i] = null;
 		}
 	}
 

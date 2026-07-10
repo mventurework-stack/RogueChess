@@ -29,6 +29,12 @@ public sealed partial class RogueChessGameComponent
 		public List<NetUnit> Units { get; set; } = new();
 		public List<CardType> BlueHand { get; set; } = new();
 		public List<CardType> RedHand { get; set; } = new();
+		// Army-builder slot contents (null = empty slot) so each player sees their own picks and the
+		// opponent's readiness while configuring.
+		public List<UnitType?> BlueArmy { get; set; } = new();
+		public List<UnitType?> RedArmy { get; set; } = new();
+		public bool BlueArmyReady { get; set; }
+		public bool RedArmyReady { get; set; }
 		public int BlueScrap { get; set; }
 		public int RedScrap { get; set; }
 		public RogueChessTeam CurrentTeam { get; set; }
@@ -72,6 +78,10 @@ public sealed partial class RogueChessGameComponent
 			} ).ToList(),
 			BlueHand = blueHand.ToList(),
 			RedHand = redHand.ToList(),
+			BlueArmy = blueArmyChoices.ToList(),
+			RedArmy = redArmyChoices.ToList(),
+			BlueArmyReady = BlueArmyReady,
+			RedArmyReady = RedArmyReady,
 			BlueScrap = BlueScrap,
 			RedScrap = RedScrap,
 			CurrentTeam = CurrentTeam,
@@ -120,6 +130,13 @@ public sealed partial class RogueChessGameComponent
 		blueHand.AddRange( state.BlueHand );
 		redHand.Clear();
 		redHand.AddRange( state.RedHand );
+
+		blueArmyChoices.Clear();
+		blueArmyChoices.AddRange( state.BlueArmy );
+		redArmyChoices.Clear();
+		redArmyChoices.AddRange( state.RedArmy );
+		BlueArmyReady = state.BlueArmyReady;
+		RedArmyReady = state.RedArmyReady;
 
 		BlueScrap = state.BlueScrap;
 		RedScrap = state.RedScrap;
