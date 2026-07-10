@@ -41,6 +41,12 @@ public sealed partial class RogueChessGameComponent
 		public int TurnNumber { get; set; }
 		public int MovesUsedThisTurn { get; set; }
 		public bool AttackUsedThisTurn { get; set; }
+		// Selection + per-turn action tracking. Required so clients can locally compute the same
+		// move/attack/card highlight guides the host shows (legality reads these).
+		public int SelectedUnitId { get; set; }
+		public int SelectedCardIndex { get; set; }
+		public int AttackerUnitIdThisTurn { get; set; }
+		public List<int> MovedUnitIdsThisTurn { get; set; } = new();
 		public bool MatchStarted { get; set; }
 		public bool IsDraw { get; set; }
 		public RogueChessTeam? Winner { get; set; }
@@ -88,6 +94,10 @@ public sealed partial class RogueChessGameComponent
 			TurnNumber = TurnNumber,
 			MovesUsedThisTurn = MovesUsedThisTurn,
 			AttackUsedThisTurn = AttackUsedThisTurn,
+			SelectedUnitId = SelectedUnitId,
+			SelectedCardIndex = SelectedCardIndex,
+			AttackerUnitIdThisTurn = attackerUnitIdThisTurn,
+			MovedUnitIdsThisTurn = movedUnitIdsThisTurn.ToList(),
 			MatchStarted = MatchStarted,
 			IsDraw = IsDraw,
 			Winner = Winner,
@@ -144,6 +154,12 @@ public sealed partial class RogueChessGameComponent
 		TurnNumber = state.TurnNumber;
 		MovesUsedThisTurn = state.MovesUsedThisTurn;
 		AttackUsedThisTurn = state.AttackUsedThisTurn;
+		SelectedUnitId = state.SelectedUnitId;
+		SelectedCardIndex = state.SelectedCardIndex;
+		attackerUnitIdThisTurn = state.AttackerUnitIdThisTurn;
+		movedUnitIdsThisTurn.Clear();
+		foreach ( var movedId in state.MovedUnitIdsThisTurn )
+			movedUnitIdsThisTurn.Add( movedId );
 		MatchStarted = state.MatchStarted;
 		IsDraw = state.IsDraw;
 		Winner = state.Winner;
