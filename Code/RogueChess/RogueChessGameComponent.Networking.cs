@@ -1,12 +1,107 @@
 using Sandbox;
+using Sandbox.Network;
 using System;
+using System.Threading.Tasks;
 
 namespace StrategyGame;
 
 public sealed partial class RogueChessGameComponent : Component.INetworkListener
 {
-	bool ShouldRouteUiActionsToHost => OnlineSessionActive;
-	bool IsOnlineTurnGateEnabled => OnlineSessionActive && Mode == RogueChessMode.PlayerVsPlayer;
+	const string RogueChessGameIdent = "roguechessalpha";
+	const string RogueChessOnlineName = "Rogue Chess Online PVP";
+	const int RogueChessOnlineMaxPlayers = 8;
+
+	bool ShouldRouteUiActionsToHost => OnlineSessionActive && Networking.IsClient && !Networking.IsHost;
+	bool IsOnlineTurnGateEnabled => OnlineSessionActive && Networking.IsActive && Mode == RogueChessMode.PlayerVsPlayer;
+
+	public bool CanHostOnlineGame => !Networking.IsActive && !Networking.IsConnecting;
+	public bool CanJoinOnlineGame => !Networking.IsActive && !Networking.IsConnecting;
+	public bool CanLeaveOnlineGame => OnlineSessionActive || Networking.IsActive || Networking.IsConnecting;
+
+	public void HostOnlineGame()
+	{
+		if ( !CanHostOnlineGame )
+		{
+			StatusMessage = "An online session is already active or connecting.";
+			MarkDirty();
+			return;
+		}
+
+		Mode = RogueChessMode.PlayerVsPlayer;
+		OnlineSessionActive = true;
+		Networking.ServerName = RogueChessOnlineName;
+		Networking.SetData( "roguechess_version", "v3-phase-2" );
+		Networking.CreateLobby( new LobbyConfig
+		{
+			Name = RogueChessOnlineName,
+			MaxPlayers = RogueChessOnlineMaxPlayers,
+			Privacy = LobbyPrivacy.Public,
+			DestroyWhenHostLeaves = true,
+			AutoSwitchToBestHost = false,
+			Hidden = false
+		} );
+
+		EnsureNetworkedGameObject();
+		TryAssignLocalHostAsBlue();
+		StatusMessage = "Hosting online PVP. Waiting for opponent.";
+		MarkDirty();
+	}
+
+	public async void JoinOnlineGame()
+	{
+		await JoinOnlineGameAsync();
+	}
+
+	async Task JoinOnlineGameAsync()
+	{
+		if ( !CanJoinOnlineGame )
+		{
+			StatusMessage = "An online session is already active or connecting.";
+			MarkDirty();
+			return;
+		}
+
+		Mode = RogueChessMode.PlayerVsPlayer;
+		StatusMessage = "Looking for a Rogue Chess online game.";
+		MarkDirty();
+
+		try
+		{
+			var joined = await Networking.JoinBestLobby( RogueChessGameIdent );
+			if ( joined )
+			{
+				OnlineSessionActive = true;
+				StatusMessage = "Joining Rogue Chess online PVP.";
+			}
+			else
+			{
+				OnlineSessionActive = false;
+				StatusMessage = "No Rogue Chess online game found. Host a game or use connect local.";
+			}
+		}
+		catch ( Exception exception )
+		{
+			OnlineSessionActive = false;
+			StatusMessage = $"Join failed: {exception.Message}";
+		}
+
+		MarkDirty();
+	}
+
+	public void LeaveOnlineGame()
+	{
+		if ( !CanLeaveOnlineGame )
+		{
+			StatusMessage = "Online is already offline.";
+			MarkDirty();
+			return;
+		}
+
+		if ( Networking.IsActive || Networking.IsConnecting )
+			Networking.Disconnect();
+
+		ClearOnlineSessionState( "Left online session." );
+	}
 
 	public void OnActive( Connection connection )
 	{
@@ -14,6 +109,7 @@ public sealed partial class RogueChessGameComponent : Component.INetworkListener
 			return;
 
 		OnlineSessionActive = true;
+		Mode = RogueChessMode.PlayerVsPlayer;
 		var connectionId = GetConnectionId( connection );
 		if ( string.IsNullOrWhiteSpace( connectionId ) )
 			return;
@@ -65,6 +161,7 @@ public sealed partial class RogueChessGameComponent : Component.INetworkListener
 			OnlineBlueConnectionId = "";
 			OnlineBlueDisplayName = "";
 			StatusMessage = "Blue Player left the online session.";
+			OnlineSessionActive = !string.IsNullOrWhiteSpace( OnlineRedConnectionId );
 			ClearSelection();
 			MarkDirty();
 			return;
@@ -75,6 +172,7 @@ public sealed partial class RogueChessGameComponent : Component.INetworkListener
 			OnlineRedConnectionId = "";
 			OnlineRedDisplayName = "";
 			StatusMessage = "Red Player left the online session.";
+			OnlineSessionActive = !string.IsNullOrWhiteSpace( OnlineBlueConnectionId );
 			ClearSelection();
 			MarkDirty();
 		}
@@ -139,20 +237,64 @@ public sealed partial class RogueChessGameComponent : Component.INetworkListener
 
 	string GetOnlineStatusText()
 	{
-		if ( !OnlineSessionActive )
-			return "Online: Inactive";
+		if ( Networking.IsConnecting )
+			return "Online: Connecting";
 
-		return $"Online role: {GetOnlineRoleLabel( LocalOnlineRole )}";
+		if ( !OnlineSessionActive || !Networking.IsActive )
+			return "Online: Offline";
+
+		if ( LocalOnlineRole == RogueChessOnlineRole.BluePlayer && string.IsNullOrWhiteSpace( OnlineRedConnectionId ) )
+			return "Online: Waiting for opponent";
+
+		return LocalOnlineRole switch
+		{
+			RogueChessOnlineRole.BluePlayer => "Online: You are Blue",
+			RogueChessOnlineRole.RedPlayer => "Online: You are Red",
+			RogueChessOnlineRole.Spectator => "Online: Spectating",
+			_ => "Online: Offline"
+		};
 	}
 
 	string GetOnlineRosterText()
 	{
-		if ( !OnlineSessionActive )
-			return "Online: Inactive";
+		if ( !OnlineSessionActive || !Networking.IsActive )
+			return "Online: Offline";
 
 		var blueName = string.IsNullOrWhiteSpace( OnlineBlueDisplayName ) ? "Waiting" : OnlineBlueDisplayName;
 		var redName = string.IsNullOrWhiteSpace( OnlineRedDisplayName ) ? "Waiting" : OnlineRedDisplayName;
 		return $"Blue: {blueName} | Red: {redName}";
+	}
+
+	void EnsureNetworkedGameObject()
+	{
+		GameObject.NetworkMode = NetworkMode.Object;
+		GameObject.NetworkSpawn();
+	}
+
+	void TryAssignLocalHostAsBlue()
+	{
+		if ( !Networking.IsHost )
+			return;
+
+		var localConnection = Connection.Local;
+		var connectionId = GetConnectionId( localConnection );
+		if ( string.IsNullOrWhiteSpace( connectionId ) )
+			return;
+
+		OnlineBlueConnectionId = connectionId;
+		OnlineBlueDisplayName = GetConnectionDisplayName( localConnection );
+	}
+
+	void ClearOnlineSessionState( string message )
+	{
+		OnlineSessionActive = false;
+		OnlineBlueConnectionId = "";
+		OnlineRedConnectionId = "";
+		OnlineBlueDisplayName = "";
+		OnlineRedDisplayName = "";
+		StatusMessage = message;
+		ClearSelection();
+		MarkDirty();
 	}
 
 	static string GetConnectionId( Connection connection )

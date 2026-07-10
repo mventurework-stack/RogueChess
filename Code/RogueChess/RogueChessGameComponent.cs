@@ -115,7 +115,7 @@ public sealed partial class RogueChessGameComponent : Component
 	[Property] public SoundEvent UnitMoveSound { get; set; }
 	[Property] public SoundEvent BackgroundSound { get; set; }
 
-	public RogueChessMode Mode { get; private set; } = RogueChessMode.PlayerVsComputer;
+	[Sync] public RogueChessMode Mode { get; private set; } = RogueChessMode.PlayerVsComputer;
 	public AiDifficulty Difficulty { get; private set; } = AiDifficulty.Beginner;
 	public RogueChessTeam CurrentTeam { get; private set; }
 	public RogueChessTeam? Winner { get; private set; }

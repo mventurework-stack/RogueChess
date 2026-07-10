@@ -27,6 +27,11 @@
 					<div class="builder-copy">Choose 3 heroes to join your Commander into battle.</div>
 					<div class="online-status">@Game.OnlineStatusText</div>
 					<div class="online-roster">@Game.OnlineRosterText</div>
+					<div class="online-control-row">
+						<div class="@GetOnlineButtonClass( Game.CanHostOnlineGame )" onclick=@Game.HostOnlineGame>Host Online</div>
+						<div class="@GetOnlineButtonClass( Game.CanJoinOnlineGame )" onclick=@Game.JoinOnlineGame>Join Online</div>
+						<div class="@GetOnlineButtonClass( Game.CanLeaveOnlineGame )" onclick=@Game.LeaveOnlineGame>Leave</div>
+					</div>
 					@if ( !string.IsNullOrEmpty( BuilderNotice ) )
 					{
 						<div class="builder-notice">@BuilderNotice</div>
@@ -448,6 +453,11 @@
 									</div>
 									<div class="@(GetModeButtonClass( RogueChessMode.PlayerVsPlayer ) + " pvp-mode-button")" onclick=@( () => Game.SetMode( RogueChessMode.PlayerVsPlayer ) )>Local PVP</div>
 								</div>
+								<div class="online-control-stack">
+									<div class="@GetOnlineButtonClass( Game.CanHostOnlineGame )" onclick=@Game.HostOnlineGame>Host Online</div>
+									<div class="@GetOnlineButtonClass( Game.CanJoinOnlineGame )" onclick=@Game.JoinOnlineGame>Join Online</div>
+									<div class="@GetOnlineButtonClass( Game.CanLeaveOnlineGame )" onclick=@Game.LeaveOnlineGame>Leave Online</div>
+								</div>
 								@if ( Game.SelectedCardIndex >= 0 )
 								{
 									<div class="action-button cancel" onclick=@Game.CancelSelectedCard>Cancel Card</div>
@@ -675,6 +685,11 @@
 	string GetModeButtonClass( RogueChessMode mode )
 	{
 		return Game?.Mode == mode ? "mode-button active" : "mode-button";
+	}
+
+	string GetOnlineButtonClass( bool enabled )
+	{
+		return enabled ? "online-button" : "online-button disabled";
 	}
 
 	string GetDifficultyButtonClass( AiDifficulty difficulty )
