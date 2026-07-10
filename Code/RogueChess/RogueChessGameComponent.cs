@@ -2298,6 +2298,7 @@ public sealed partial class RogueChessGameComponent : Component
 	{
 		UiVersion++;
 		uiPanel?.StateHasChanged();
+		BroadcastStateIfHost();
 	}
 
 	readonly record struct BoardEffect( GridPos Position, string EffectType, float StartTime, float EndTime );
